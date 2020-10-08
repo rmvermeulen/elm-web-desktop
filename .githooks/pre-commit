@@ -1,3 +1,5 @@
 #! /usr/bin/env sh
 
 echo "HOOK: pre-commit"
+elm-format --yes src/
+elm-app test
