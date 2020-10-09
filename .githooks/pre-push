@@ -1,4 +1,4 @@
 #! /usr/bin/env sh
 
 echo "HOOK: pre-push"
-elm-format --validate
+elm-format --validate src/ tests/
