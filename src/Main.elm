@@ -42,7 +42,8 @@ update msg model =
 view : Model -> Element Msg
 view model =
     column [ padding 10, spacing 20, Background.color (rgb 0.2 0.2 0.2) ]
-        [ el [ Font.color (rgb 0.7 0.7 1) ] <| text "this"
+        [ el [ padding 18, Background.color (rgb 0 0 0), Font.color (rgb 1 1 1) ] <| text "Elm with mdgriffith/elm-ui!"
+        , el [ Font.color (rgb 0.7 0.7 1) ] <| text "this"
         , el [ Font.color (rgb 1 1 0.7) ] <| text "is a"
         , el [ Font.color (rgb 1 0.7 1) ] <| text "column"
         , row [ spacing 20, padding 10, Background.color (rgb 0 0 0) ]
