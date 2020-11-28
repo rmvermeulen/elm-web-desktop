@@ -17,12 +17,18 @@ import Set exposing (Set)
 
 type alias Model =
     { desktop : Desktop.Model
+    , menu :
+        { open : Bool
+        }
     }
 
 
 init : ( Model, Cmd Msg )
 init =
     ( { desktop = Desktop.init
+      , menu =
+            { open = False
+            }
       }
     , Cmd.none
     )
@@ -33,12 +39,36 @@ init =
 
 
 type Msg
-    = NoOp
+    = OpenMenu
+    | CloseMenu
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    ( model, Cmd.none )
+    let
+        simply m =
+            ( m, Cmd.none )
+    in
+    case msg of
+        OpenMenu ->
+            let
+                { menu } =
+                    model
+
+                openedMenu =
+                    { menu | open = True }
+            in
+            simply { model | menu = openedMenu }
+
+        CloseMenu ->
+            let
+                { menu } =
+                    model
+
+                closedMenu =
+                    { menu | open = False }
+            in
+            simply { model | menu = closedMenu }
 
 
 
@@ -105,19 +135,52 @@ quickGradient { angle, stepCount, start, end } =
 
 
 viewTaskbar : Model -> Element Msg
-viewTaskbar model =
+viewTaskbar { menu } =
+    let
+        menuText =
+            "Menu "
+                ++ (if menu.open then
+                        "(-)"
+
+                    else
+                        "(+)"
+                   )
+    in
     row
         [ width fill
         , height (fill |> maximum 64)
         , Background.color (rgb 0.4 0.4 0.4)
         , padding 10
+        , above <|
+            if menu.open then
+                column
+                    [ padding 20
+                    , spacing 10
+                    , Background.color
+                        (rgb 1 1 1)
+                    ]
+                    [ el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
+                        text "Option A"
+                    , el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
+                        text "Option B"
+                    , el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
+                        text "Option C"
+                    ]
+
+            else
+                none
         ]
         [ Input.button
             [ padding 10
             , mouseOver [ Background.color (rgb 0.7 0.7 0.7) ]
             ]
-            { label = text "Menu"
-            , onPress = Just NoOp
+            { label = text menuText
+            , onPress =
+                if menu.open then
+                    Just CloseMenu
+
+                else
+                    Just OpenMenu
             }
         ]
 
