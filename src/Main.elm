@@ -1,10 +1,12 @@
 module Main exposing (..)
 
 import Browser
+import Desktop
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
+import Element.Input as Input
 import Maybe
 import Set exposing (Set)
 
@@ -14,12 +16,16 @@ import Set exposing (Set)
 
 
 type alias Model =
-    {}
+    { desktop : Desktop.Model
+    }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( {}, Cmd.none )
+    ( { desktop = Desktop.init
+      }
+    , Cmd.none
+    )
 
 
 
@@ -41,15 +47,78 @@ update msg model =
 
 view : Model -> Element Msg
 view model =
-    column [ padding 10, spacing 20, Background.color (rgb 0.2 0.2 0.2) ]
-        [ el [ padding 18, Background.color (rgb 0 0 0), Font.color (rgb 1 1 1) ] <| text "Elm with mdgriffith/elm-ui!"
-        , el [ Font.color (rgb 0.7 0.7 1) ] <| text "this"
-        , el [ Font.color (rgb 1 1 0.7) ] <| text "is a"
-        , el [ Font.color (rgb 1 0.7 1) ] <| text "column"
-        , row [ spacing 20, padding 10, Background.color (rgb 0 0 0) ]
-            [ el [ Font.color (rgb 1 1 0.7) ] <| text "and this"
-            , el [ Font.color (rgb 1 0.7 1) ] <| text "is a row"
+    column [ width fill, height fill ]
+        [ viewDesktopArea model
+        , viewTaskbar model
+        ]
+
+
+viewDesktopArea : Model -> Element Msg
+viewDesktopArea model =
+    el
+        [ width fill
+        , height fill
+        , quickGradient
+            { angle = 0.05 * pi
+            , stepCount = 32
+            , start = rgb 0.2 0 0.4
+            , end = rgb 0.6 0.6 1
+            }
+        ]
+        none
+
+
+quickGradient : { angle : Float, stepCount : Int, start : Element.Color, end : Element.Color } -> Attribute Msg
+quickGradient { angle, stepCount, start, end } =
+    let
+        ( dr, dg, db ) =
+            let
+                a =
+                    toRgb start
+
+                b =
+                    toRgb end
+
+                f =
+                    toFloat stepCount
+            in
+            ( (b.red - a.red) / f
+            , (b.green - a.green) / f
+            , (b.blue - a.blue) / f
+            )
+
+        steps =
+            List.repeat stepCount (toRgb start)
+                |> List.indexedMap
+                    (\index { red, green, blue } ->
+                        let
+                            s =
+                                toFloat index
+                        in
+                        rgb (red + s * dr) (green + s * dg) (blue + s * db)
+                    )
+    in
+    Background.gradient
+        { angle = angle
+        , steps = steps
+        }
+
+
+viewTaskbar : Model -> Element Msg
+viewTaskbar model =
+    row
+        [ width fill
+        , height (fill |> maximum 64)
+        , Background.color (rgb 0.4 0.4 0.4)
+        , padding 10
+        ]
+        [ Input.button
+            [ padding 10
+            , mouseOver [ Background.color (rgb 0.7 0.7 0.7) ]
             ]
+            { label = text "Menu"
+            , onPress = Just NoOp
+            }
         ]
 
 
