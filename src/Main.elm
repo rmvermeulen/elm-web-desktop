@@ -94,8 +94,31 @@ viewDesktopArea model =
             , start = rgb 0.2 0 0.4
             , end = rgb 0.6 0.6 1
             }
+        , inFront <|
+            column [ padding 20, spacing 10 ]
+                [ viewDesktopIcon "some icon 1" "logo.svg"
+                , viewDesktopIcon "some icon 2" "logo.svg"
+                , viewDesktopIcon "some icon 3" "logo.svg"
+                , viewDesktopIcon "some icon 4" "logo.svg"
+                ]
         ]
         none
+
+
+viewDesktopIcon : String -> String -> Element Msg
+viewDesktopIcon name src =
+    column
+        [ spacing 10
+        , Font.center
+        , mouseOver
+            [ Background.color (rgba 0.3 0.3 0.3 0.3)
+            ]
+        , Border.rounded 8
+        , padding 8
+        ]
+        [ image [ width (px 40), height (px 40), centerX ] { src = src, description = name }
+        , text name
+        ]
 
 
 quickGradient : { angle : Float, stepCount : Int, start : Element.Color, end : Element.Color } -> Attribute Msg
