@@ -1,5 +1,7 @@
 module Desktop exposing (..)
 
+import Desktop.Icon as Icon
+
 
 type alias Program =
     { name : String }
@@ -14,6 +16,7 @@ type alias Process =
 type alias Model =
     { programs : List Program
     , processes : List Process
+    , icons : List Icon.Model
     }
 
 
@@ -23,8 +26,28 @@ type Msg
 
 init : Model
 init =
-    { programs = [ Program "TextEditor", Program "ImageEditor" ]
+    let
+        programs =
+            [ Program "TextEditor"
+            , Program "ImageEditor"
+            , Program "Some Game"
+            , Program "Work stuff"
+            , Program "Photos"
+            , Program "Some stupidly long name"
+            ]
+    in
+    { programs = programs
     , processes = []
+    , icons =
+        programs
+            |> List.map
+                (\{ name } ->
+                    let
+                        description =
+                            "about:" ++ name
+                    in
+                    Icon.Model name description "logo.svg"
+                )
     }
 
 

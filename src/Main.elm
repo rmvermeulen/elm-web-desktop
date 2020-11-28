@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Browser
 import Desktop
+import Desktop.Icon
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -43,12 +44,8 @@ type Msg
     | CloseMenu
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> Model
 update msg model =
-    let
-        simply m =
-            ( m, Cmd.none )
-    in
     case msg of
         OpenMenu ->
             let
@@ -58,7 +55,7 @@ update msg model =
                 openedMenu =
                     { menu | open = True }
             in
-            simply { model | menu = openedMenu }
+            { model | menu = openedMenu }
 
         CloseMenu ->
             let
@@ -68,7 +65,7 @@ update msg model =
                 closedMenu =
                     { menu | open = False }
             in
-            simply { model | menu = closedMenu }
+            { model | menu = closedMenu }
 
 
 
@@ -78,12 +75,12 @@ update msg model =
 view : Model -> Element Msg
 view model =
     column [ width fill, height fill ]
-        [ viewDesktopArea model
+        [ viewDesktopArea model.desktop
         , viewTaskbar model
         ]
 
 
-viewDesktopArea : Model -> Element Msg
+viewDesktopArea : Desktop.Model -> Element Msg
 viewDesktopArea model =
     el
         [ width fill
@@ -94,31 +91,20 @@ viewDesktopArea model =
             , start = rgb 0.2 0 0.4
             , end = rgb 0.6 0.6 1
             }
-        , inFront <|
-            column [ padding 20, spacing 10 ]
-                [ viewDesktopIcon "some icon 1" "logo.svg"
-                , viewDesktopIcon "some icon 2" "logo.svg"
-                , viewDesktopIcon "some icon 3" "logo.svg"
-                , viewDesktopIcon "some icon 4" "logo.svg"
+        , model.icons
+            |> List.map Desktop.Icon.view
+            |> column
+                [ padding 20
+                , spacing 10
+                , width
+                    (shrink
+                        |> minimum 40
+                        |> maximum 250
+                    )
                 ]
+            |> inFront
         ]
         none
-
-
-viewDesktopIcon : String -> String -> Element Msg
-viewDesktopIcon name src =
-    column
-        [ spacing 10
-        , Font.center
-        , mouseOver
-            [ Background.color (rgba 0.3 0.3 0.3 0.3)
-            ]
-        , Border.rounded 8
-        , padding 8
-        ]
-        [ image [ width (px 40), height (px 40), centerX ] { src = src, description = name }
-        , text name
-        ]
 
 
 quickGradient : { angle : Float, stepCount : Int, start : Element.Color, end : Element.Color } -> Attribute Msg
@@ -222,6 +208,6 @@ main =
     Browser.element
         { view = \model -> layout [] (view model)
         , init = \_ -> init
-        , update = update
+        , update = \msg model -> ( update msg model, Cmd.none )
         , subscriptions = always Sub.none
         }
