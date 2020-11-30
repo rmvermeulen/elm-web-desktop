@@ -11,24 +11,34 @@ type alias Model =
     { name : String
     , description : String
     , src : String
+    , selected : Bool
     }
 
 
-view : Model -> Element msg
-view { name, description, src } =
-    column
-        [ spacing 10
-        , mouseOver
-            [ Background.color (rgba 0.3 0.3 0.3 0.3)
-            ]
-        , Border.rounded 8
-        , Border.dotted
+view : msg -> Model -> Element msg
+view onSelect { name, description, selected, src } =
+    let
+        borderAttrs =
+            if selected then
+                [ Border.rounded 8
+                , Border.dotted
+                , Border.width 2
+                , padding 8
+                ]
 
-        -- , Border.color (rgb 0 0 0)
-        , Border.width 2
-        , padding 8
-        , width fill
-        ]
+            else
+                []
+    in
+    column
+        (borderAttrs
+            ++ [ spacing 10
+               , mouseOver
+                    [ Background.color (rgba 0.3 0.3 0.3 0.3)
+                    ]
+               , width fill
+               , Events.onClick onSelect
+               ]
+        )
         [ image [ width (px 40), height (px 40), centerX ]
             { src = src
             , description = description

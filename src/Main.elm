@@ -3,6 +3,7 @@ module Main exposing (..)
 import Browser
 import Desktop
 import Desktop.Icon
+import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -42,6 +43,7 @@ init =
 type Msg
     = OpenMenu
     | CloseMenu
+    | DesktopMsg Desktop.Msg
 
 
 update : Msg -> Model -> Model
@@ -67,6 +69,12 @@ update msg model =
             in
             { model | menu = closedMenu }
 
+        DesktopMsg desktopMsg ->
+            { model
+                | desktop =
+                    Desktop.update desktopMsg model.desktop
+            }
+
 
 
 ---- VIEW ----
@@ -75,72 +83,10 @@ update msg model =
 view : Model -> Element Msg
 view model =
     column [ width fill, height fill ]
-        [ viewDesktopArea model.desktop
+        [ Desktop.view model.desktop
+            |> map DesktopMsg
         , viewTaskbar model
         ]
-
-
-viewDesktopArea : Desktop.Model -> Element Msg
-viewDesktopArea model =
-    el
-        [ width fill
-        , height fill
-        , quickGradient
-            { angle = 0.05 * pi
-            , stepCount = 32
-            , start = rgb 0.2 0 0.4
-            , end = rgb 0.6 0.6 1
-            }
-        , model.icons
-            |> List.map Desktop.Icon.view
-            |> column
-                [ padding 20
-                , spacing 10
-                , width
-                    (shrink
-                        |> minimum 40
-                        |> maximum 250
-                    )
-                ]
-            |> inFront
-        ]
-        none
-
-
-quickGradient : { angle : Float, stepCount : Int, start : Element.Color, end : Element.Color } -> Attribute Msg
-quickGradient { angle, stepCount, start, end } =
-    let
-        ( dr, dg, db ) =
-            let
-                a =
-                    toRgb start
-
-                b =
-                    toRgb end
-
-                f =
-                    toFloat stepCount
-            in
-            ( (b.red - a.red) / f
-            , (b.green - a.green) / f
-            , (b.blue - a.blue) / f
-            )
-
-        steps =
-            List.repeat stepCount (toRgb start)
-                |> List.indexedMap
-                    (\index { red, green, blue } ->
-                        let
-                            s =
-                                toFloat index
-                        in
-                        rgb (red + s * dr) (green + s * dg) (blue + s * db)
-                    )
-    in
-    Background.gradient
-        { angle = angle
-        , steps = steps
-        }
 
 
 viewTaskbar : Model -> Element Msg
@@ -165,6 +111,7 @@ viewTaskbar { desktop, menu } =
                 let
                     items =
                         desktop.programs
+                            |> Dict.values
                             |> List.map
                                 (\{ name } ->
                                     el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
