@@ -31,7 +31,7 @@ init =
             [ Program "TextEditor"
             , Program "ImageEditor"
             , Program "Some Game"
-            , Program "Work stuff"
+            , Program "IntegratedTerminal"
             , Program "Photos"
             , Program "Some stupidly long name"
             ]

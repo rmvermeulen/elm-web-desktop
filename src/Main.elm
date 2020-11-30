@@ -144,7 +144,7 @@ quickGradient { angle, stepCount, start, end } =
 
 
 viewTaskbar : Model -> Element Msg
-viewTaskbar { menu } =
+viewTaskbar { desktop, menu } =
     let
         menuText =
             "Menu "
@@ -162,19 +162,22 @@ viewTaskbar { menu } =
         , padding 10
         , above <|
             if menu.open then
+                let
+                    items =
+                        desktop.programs
+                            |> List.map
+                                (\{ name } ->
+                                    el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
+                                        text name
+                                )
+                in
                 column
                     [ padding 20
                     , spacing 10
                     , Background.color
                         (rgb 1 1 1)
                     ]
-                    [ el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
-                        text "Option A"
-                    , el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
-                        text "Option B"
-                    , el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
-                        text "Option C"
-                    ]
+                    items
 
             else
                 none
