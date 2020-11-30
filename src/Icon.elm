@@ -1,4 +1,4 @@
-module Desktop.Icon exposing (..)
+module Icon exposing (..)
 
 import Element exposing (..)
 import Element.Background as Background
