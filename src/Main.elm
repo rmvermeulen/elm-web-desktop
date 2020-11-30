@@ -143,8 +143,13 @@ viewTaskbar { desktop, menu } =
                     Just OpenMenu
             }
             :: (desktop.processes
-                    |> List.map (\{ id, program } -> text <| "[" ++ String.fromInt id ++ ":" ++ program.name ++ "]")
+                    |> List.map viewTaskbarProcess
                )
+
+
+viewTaskbarProcess : Desktop.Process -> Element Msg
+viewTaskbarProcess { id, program } =
+    text <| program.name ++ "@" ++ String.fromInt id
 
 
 
