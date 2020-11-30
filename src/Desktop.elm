@@ -1,8 +1,6 @@
 module Desktop exposing (..)
 
 import Basics.Extra
-import Dict exposing (Dict)
-import Dict.Extra
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -14,6 +12,7 @@ import Maybe.Extra
 import Set exposing (Set)
 import Set.Extra
 import String.Extra
+import Table exposing (Table)
 
 
 type alias Icon =
@@ -23,35 +22,33 @@ type alias Icon =
     }
 
 
-type alias Program =
+type alias App =
     { name : String
     , icon : String
     }
 
 
 type alias Process =
-    { id : Int
-    , program : Program
+    { app : App
     }
 
 
 type Focus
     = TaskbarMenu
-    | DesktopIcon String
+    | DesktopIcon (Table.Id Icon)
 
 
 type alias Model =
-    { icons : Dict String Icon
+    { icons : Table Icon
     , mFocus : Maybe Focus
-    , nextId : Int
-    , processes : List Process
-    , programs : Dict String Program
+    , processes : Table Process
+    , apps : Table App
     }
 
 
 type Msg
-    = StopProcess Int
-    | StartProcess Program
+    = StopProcess (Table.Id Process)
+    | StartProcess App
     | ToggleSelect Focus
     | Select Focus
     | Deselect
@@ -60,39 +57,51 @@ type Msg
 init : Model
 init =
     let
-        programList =
-            [ Program "TextEditor" "logo.svg"
-            , Program "ImageEditor" "logo.svg"
-            , Program "Some Game" "logo.svg"
-            , Program "IntegratedTerminal" "logo.svg"
-            , Program "Photos" "logo.svg"
-            , Program "Some stupidly long name" "logo.svg"
+        createApp name =
+            App name "logo.svg"
+
+        appList =
+            [ createApp "TextEditor"
+            , createApp "ImageEditor"
+            , createApp "Some Game"
+            , createApp "IntegratedTerminal"
+            , createApp "Photos"
+            , createApp "Some stupidly long name"
             ]
 
+        icons : Table Icon
         icons =
-            programList
-                |> List.map
-                    (\{ name } ->
-                        let
-                            description =
-                                "about:" ++ name
-                        in
-                        ( name, Icon name description "logo.svg" )
-                    )
-                |> Dict.fromList
+            let
+                addIcon : App -> Table Icon -> Table Icon
+                addIcon app table =
+                    let
+                        description =
+                            "about:" ++ app.name
 
-        nextId =
-            1001
+                        icon =
+                            Icon app.name description app.icon
+                    in
+                    Table.add icon table |> Tuple.first
+            in
+            appList
+                |> List.foldl addIcon Table.empty
 
+        processes : Table Process
         processes =
-            [ Process 1000 (Program "TextEditor" "logo.svg") ]
+            Table.add (Process <| createApp "TextEditor") Table.empty
+                |> Tuple.first
 
-        programs =
-            programList
-                |> List.map (\prog -> ( prog.name, prog ))
-                |> Dict.fromList
+        apps : Table App
+        apps =
+            let
+                addApp prog table =
+                    Table.add prog table
+                        |> Tuple.first
+            in
+            appList
+                |> List.foldl addApp Table.empty
     in
-    Model icons Nothing nextId processes programs
+    Model icons Nothing processes apps
 
 
 update : Msg -> Model -> Model
@@ -100,19 +109,17 @@ update msg model =
     case msg of
         StopProcess id ->
             { model
-                | processes =
-                    model.processes
-                        |> List.filter (\p -> p.id /= id)
+                | processes = Table.remove id model.processes
             }
 
         StartProcess program ->
             let
-                process =
-                    Process model.nextId program
+                processes =
+                    Table.add (Process program) model.processes
+                        |> Tuple.first
             in
             { model
-                | nextId = model.nextId + 1
-                , processes = process :: model.processes
+                | processes = processes
             }
 
         ToggleSelect target ->
@@ -139,33 +146,45 @@ update msg model =
 
 view : Model -> Element Msg
 view model =
-    column [ width fill, height fill ]
-        [ el
-            [ width fill
-            , height fill
+    let
+        background =
+            el
+                ([ width fill
+                 , height fill
+                 , quickGradient
+                    { angle = 0.05 * pi
+                    , stepCount = 32
+                    , start = rgb 0.2 0 0.4
+                    , end = rgb 0.6 0.6 1
+                    }
+                 , icons |> inFront
+                 ]
+                 -- ++ (if model.mFocus /= Nothing then
+                 --         [ Events.onClick Deselect ]
+                 --     else
+                 --         []
+                 --    )
+                )
+                none
 
-            -- , Events.onClick Deselect
-            , quickGradient
-                { angle = 0.05 * pi
-                , stepCount = 32
-                , start = rgb 0.2 0 0.4
-                , end = rgb 0.6 0.6 1
-                }
-            , model.icons
-                |> Dict.map
-                    (\key icon ->
-                        let
-                            selected =
-                                case model.mFocus of
-                                    Just (DesktopIcon name) ->
-                                        name == key
+        icons =
+            let
+                renderIcon ( key, icon ) =
+                    let
+                        selected : Bool
+                        selected =
+                            case model.mFocus of
+                                Just (DesktopIcon name) ->
+                                    name == key
 
-                                    _ ->
-                                        False
-                        in
-                        viewIcon icon selected
-                    )
-                |> Dict.values
+                                _ ->
+                                    False
+                    in
+                    viewIcon icon key selected
+            in
+            model.icons
+                |> Table.pairs
+                |> List.map renderIcon
                 |> column
                     [ padding 20
                     , spacing 10
@@ -175,25 +194,25 @@ view model =
                             |> maximum 250
                         )
                     ]
-                |> inFront
-            ]
-            none
+    in
+    column [ width fill, height fill ]
+        [ background
         , viewTaskbar model
         ]
 
 
-viewProcess : Process -> Element Msg
-viewProcess { id, program } =
+viewProcess : Int -> Process -> Element Msg
+viewProcess pid { app } =
     column []
         [ row []
-            [ text program.name
+            [ text app.name
             , row [] [ text "close", text "min", text "max" ]
             ]
         ]
 
 
 viewTaskbar : Model -> Element Msg
-viewTaskbar { mFocus, programs, processes } =
+viewTaskbar { mFocus, apps, processes } =
     let
         selected =
             case mFocus of
@@ -221,8 +240,8 @@ viewTaskbar { mFocus, programs, processes } =
             if selected then
                 let
                     items =
-                        programs
-                            |> Dict.values
+                        apps
+                            |> Table.values
                             |> List.map
                                 (\{ name } ->
                                     el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
@@ -250,19 +269,30 @@ viewTaskbar { mFocus, programs, processes } =
                 Just <| ToggleSelect TaskbarMenu
             }
             :: (processes
+                    |> Table.values
                     |> List.map viewTaskbarProcess
                )
 
 
 viewTaskbarProcess : Process -> Element Msg
-viewTaskbarProcess { id, program } =
-    text <| program.name ++ "@" ++ String.fromInt id
+viewTaskbarProcess { app } =
+    text app.name
 
 
-viewIcon : Icon -> Bool -> Element Msg
-viewIcon { name, description, src } selected =
+viewIcon : Icon -> Table.Id Icon -> Bool -> Element Msg
+viewIcon { name, description, src } id selected =
     let
-        borderAttrs =
+        baseAttrs =
+            [ spacing 10
+            , mouseOver
+                [ Background.color (rgba 0.3 0.3 0.3 0.3)
+                ]
+            , width fill
+            , Events.onClick
+                (Select <| DesktopIcon id)
+            ]
+
+        selectionAttrs =
             if selected then
                 [ Border.rounded 8
                 , Border.dotted
@@ -271,17 +301,9 @@ viewIcon { name, description, src } selected =
                 ]
 
             else
-                [ Events.onClick (Select <| DesktopIcon name) ]
+                []
     in
-    column
-        (borderAttrs
-            ++ [ spacing 10
-               , mouseOver
-                    [ Background.color (rgba 0.3 0.3 0.3 0.3)
-                    ]
-               , width fill
-               ]
-        )
+    column (selectionAttrs ++ baseAttrs)
         [ image [ width (px 40), height (px 40), centerX ]
             { src = src
             , description = description
