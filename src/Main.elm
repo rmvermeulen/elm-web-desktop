@@ -182,7 +182,8 @@ viewTaskbar { desktop, menu } =
             else
                 none
         ]
-        [ Input.button
+    <|
+        Input.button
             [ padding 10
             , mouseOver [ Background.color (rgb 0.7 0.7 0.7) ]
             ]
@@ -194,7 +195,9 @@ viewTaskbar { desktop, menu } =
                 else
                     Just OpenMenu
             }
-        ]
+            :: (desktop.processes
+                    |> List.map (\{ id, program } -> text <| "[" ++ String.fromInt id ++ ":" ++ program.name ++ "]")
+               )
 
 
 

@@ -14,14 +14,16 @@ type alias Process =
 
 
 type alias Model =
-    { programs : List Program
+    { nextId : Int
+    , programs : List Program
     , processes : List Process
     , icons : List Icon.Model
     }
 
 
 type Msg
-    = NoOp
+    = StopProcess Int
+    | StartProcess Program
 
 
 init : Model
@@ -37,6 +39,7 @@ init =
             ]
     in
     { programs = programs
+    , nextId = 0
     , processes = []
     , icons =
         programs
@@ -49,8 +52,25 @@ init =
                     Icon.Model name description "logo.svg"
                 )
     }
+        |> update (StartProcess <| Program "TextEditor")
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> Model
 update msg model =
-    ( model, Cmd.none )
+    case msg of
+        StopProcess id ->
+            { model
+                | processes =
+                    model.processes
+                        |> List.filter (\p -> p.id /= id)
+            }
+
+        StartProcess program ->
+            let
+                process =
+                    Process model.nextId program
+            in
+            { model
+                | nextId = model.nextId + 1
+                , processes = process :: model.processes
+            }
