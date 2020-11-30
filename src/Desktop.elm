@@ -1,13 +1,19 @@
 module Desktop exposing (..)
 
+import Basics.Extra
 import Dict exposing (Dict)
+import Dict.Extra
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
+import List.Extra
+import Maybe.Extra
 import Set exposing (Set)
+import Set.Extra
+import String.Extra
 
 
 type alias Icon =
