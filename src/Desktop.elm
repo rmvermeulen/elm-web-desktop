@@ -3,9 +3,18 @@ module Desktop exposing (..)
 import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Background as Background
+import Element.Border as Border
+import Element.Events as Events
+import Element.Font as Font
 import Element.Input as Input
-import Icon
 import Set exposing (Set)
+
+
+type alias Icon =
+    { name : String
+    , description : String
+    , src : String
+    }
 
 
 type alias Program =
@@ -20,11 +29,14 @@ type alias Process =
     }
 
 
+type Focus
+    = TaskbarMenu
+    | DesktopIcon String
+
+
 type alias Model =
-    { icons : Dict String Icon.Model
-    , menu :
-        { open : Bool
-        }
+    { icons : Dict String Icon
+    , mFocus : Maybe Focus
     , nextId : Int
     , processes : List Process
     , programs : Dict String Program
@@ -34,10 +46,9 @@ type alias Model =
 type Msg
     = StopProcess Int
     | StartProcess Program
-    | Select (Set String)
+    | ToggleSelect Focus
+    | Select Focus
     | Deselect
-    | OpenMenu
-    | CloseMenu
 
 
 init : Model
@@ -60,12 +71,9 @@ init =
                             description =
                                 "about:" ++ name
                         in
-                        ( name, Icon.Model name description "logo.svg" False )
+                        ( name, Icon name description "logo.svg" )
                     )
                 |> Dict.fromList
-
-        menu =
-            { open = False }
 
         nextId =
             1001
@@ -78,7 +86,7 @@ init =
                 |> List.map (\prog -> ( prog.name, prog ))
                 |> Dict.fromList
     in
-    Model icons menu nextId processes programs
+    Model icons Nothing nextId processes programs
 
 
 update : Msg -> Model -> Model
@@ -101,31 +109,26 @@ update msg model =
                 , processes = process :: model.processes
             }
 
-        Select selected ->
-            let
-                icons =
-                    model.icons
-                        |> Dict.map
-                            (\key icon ->
-                                { icon | selected = Set.member key selected }
-                            )
-            in
-            { model | icons = icons }
+        ToggleSelect target ->
+            { model
+                | mFocus =
+                    case model.mFocus of
+                        Just focus ->
+                            if focus == target then
+                                Nothing
+
+                            else
+                                Just target
+
+                        Nothing ->
+                            Just target
+            }
+
+        Select target ->
+            { model | mFocus = Just target }
 
         Deselect ->
-            let
-                deselected =
-                    model.icons
-                        |> Dict.map
-                            (\_ icon -> { icon | selected = False })
-            in
-            { model | icons = deselected }
-
-        OpenMenu ->
-            { model | menu = { open = True } }
-
-        closeMenu ->
-            { model | menu = { open = False } }
+            { model | mFocus = Nothing }
 
 
 view : Model -> Element Msg
@@ -134,6 +137,8 @@ view model =
         [ el
             [ width fill
             , height fill
+
+            -- , Events.onClick Deselect
             , quickGradient
                 { angle = 0.05 * pi
                 , stepCount = 32
@@ -144,10 +149,15 @@ view model =
                 |> Dict.map
                     (\key icon ->
                         let
-                            onSelect =
-                                Select (Set.singleton key)
+                            selected =
+                                case model.mFocus of
+                                    Just (DesktopIcon name) ->
+                                        name == key
+
+                                    _ ->
+                                        False
                         in
-                        Icon.view onSelect icon
+                        viewIcon icon selected
                     )
                 |> Dict.values
                 |> column
@@ -177,11 +187,19 @@ viewAppWindow { id, program } =
 
 
 viewTaskbar : Model -> Element Msg
-viewTaskbar { programs, processes, menu } =
+viewTaskbar { mFocus, programs, processes } =
     let
+        selected =
+            case mFocus of
+                Just TaskbarMenu ->
+                    True
+
+                _ ->
+                    False
+
         menuText =
             "Menu "
-                ++ (if menu.open then
+                ++ (if selected then
                         "(-)"
 
                     else
@@ -194,7 +212,7 @@ viewTaskbar { programs, processes, menu } =
         , Background.color (rgb 0.4 0.4 0.4)
         , padding 10
         , above <|
-            if menu.open then
+            if selected then
                 let
                     items =
                         programs
@@ -223,11 +241,7 @@ viewTaskbar { programs, processes, menu } =
             ]
             { label = text menuText
             , onPress =
-                if menu.open then
-                    Just CloseMenu
-
-                else
-                    Just OpenMenu
+                Just <| ToggleSelect TaskbarMenu
             }
             :: (processes
                     |> List.map viewTaskbarProcess
@@ -237,6 +251,41 @@ viewTaskbar { programs, processes, menu } =
 viewTaskbarProcess : Process -> Element Msg
 viewTaskbarProcess { id, program } =
     text <| program.name ++ "@" ++ String.fromInt id
+
+
+viewIcon : Icon -> Bool -> Element Msg
+viewIcon { name, description, src } selected =
+    let
+        borderAttrs =
+            if selected then
+                [ Border.rounded 8
+                , Border.dotted
+                , Border.width 2
+                , padding 8
+                ]
+
+            else
+                [ Events.onClick (Select <| DesktopIcon name) ]
+    in
+    column
+        (borderAttrs
+            ++ [ spacing 10
+               , mouseOver
+                    [ Background.color (rgba 0.3 0.3 0.3 0.3)
+                    ]
+               , width fill
+               ]
+        )
+        [ image [ width (px 40), height (px 40), centerX ]
+            { src = src
+            , description = description
+            }
+        , el
+            [ width fill
+            , Font.center
+            ]
+            (paragraph [] [ text name ])
+        ]
 
 
 quickGradient : { angle : Float, stepCount : Int, start : Element.Color, end : Element.Color } -> Attribute Msg

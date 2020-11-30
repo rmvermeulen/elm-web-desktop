@@ -2,15 +2,11 @@ module Main exposing (..)
 
 import Browser
 import Desktop
-import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
-import Icon
-import Maybe
-import Set exposing (Set)
 
 
 type alias Model =
