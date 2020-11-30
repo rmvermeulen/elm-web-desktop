@@ -230,13 +230,19 @@ viewTaskbar { mFocus, apps, processes } =
                     else
                         "(+)"
                    )
-    in
-    row
-        [ width fill
-        , height (fill |> maximum 64)
-        , Background.color (rgb 0.4 0.4 0.4)
-        , padding 10
-        , above <|
+
+        menuButton =
+            Input.button
+                [ padding 10
+                , mouseOver [ Background.color (rgb 0.7 0.7 0.7) ]
+                , width (shrink |> minimum 100)
+                ]
+                { label = text menuText
+                , onPress =
+                    Just <| ToggleSelect TaskbarMenu
+                }
+
+        menu =
             if selected then
                 let
                     items =
@@ -244,7 +250,13 @@ viewTaskbar { mFocus, apps, processes } =
                             |> Table.values
                             |> List.map
                                 (\{ name } ->
-                                    el [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ] ] <|
+                                    el
+                                        [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ]
+                                        , padding 10
+                                        , width fill
+                                        , Font.alignLeft
+                                        ]
+                                    <|
                                         text name
                                 )
                 in
@@ -258,20 +270,20 @@ viewTaskbar { mFocus, apps, processes } =
 
             else
                 none
+    in
+    row
+        [ width fill
+        , height (fill |> maximum 64)
+        , Background.color (rgb 0.4 0.4 0.4)
+        , padding 10
+        , above menu
         ]
-    <|
-        Input.button
-            [ padding 10
-            , mouseOver [ Background.color (rgb 0.7 0.7 0.7) ]
-            ]
-            { label = text menuText
-            , onPress =
-                Just <| ToggleSelect TaskbarMenu
-            }
+        (menuButton
             :: (processes
                     |> Table.values
                     |> List.map viewTaskbarProcess
                )
+        )
 
 
 viewTaskbarProcess : Process -> Element Msg
@@ -294,16 +306,24 @@ viewIcon { name, description, src } id selected =
 
         selectionAttrs =
             if selected then
-                [ Border.rounded 8
-                , Border.dotted
+                [ Border.dotted
+
+                -- , Border.rounded 8
                 , Border.width 2
                 , padding 8
+                , width fill
+                , height fill
+                , Background.color (rgba 1 1 1 0.3)
                 ]
 
             else
                 []
+
+        selectionVisual =
+            el selectionAttrs none
+                |> behindContent
     in
-    column (selectionAttrs ++ baseAttrs)
+    column (selectionVisual :: baseAttrs)
         [ image [ width (px 40), height (px 40), centerX ]
             { src = src
             , description = description
