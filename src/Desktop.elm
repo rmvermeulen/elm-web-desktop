@@ -176,8 +176,8 @@ view model =
         ]
 
 
-viewAppWindow : Process -> Element Msg
-viewAppWindow { id, program } =
+viewProcess : Process -> Element Msg
+viewProcess { id, program } =
     column []
         [ row []
             [ text program.name
