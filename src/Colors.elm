@@ -15,7 +15,7 @@ green =
 
 yellow : Color
 yellow =
-    rgb 0 1 1
+    rgb 1 1 0
 
 
 blue : Color
