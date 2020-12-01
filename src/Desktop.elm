@@ -1,6 +1,7 @@
 module Desktop exposing (..)
 
 import Basics.Extra
+import Colors
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -61,12 +62,12 @@ init =
             App name "logo.svg"
 
         appList =
-            [ createApp "TextEditor"
-            , createApp "ImageEditor"
-            , createApp "Some Game"
-            , createApp "IntegratedTerminal"
+            [ createApp "Text Editor"
+            , createApp "Image Editor"
+            , createApp "Shooter Game"
+            , createApp "Terminal"
             , createApp "Photos"
-            , createApp "Some stupidly long name"
+            , createApp "My favorite document(2) - final.jpg"
             ]
 
         icons : Table Icon
@@ -234,8 +235,10 @@ viewTaskbar { mFocus, apps, processes } =
         menuButton =
             Input.button
                 [ padding 10
-                , mouseOver [ Background.color (rgb 0.7 0.7 0.7) ]
+                , mouseOver [ Background.color (Colors.gray 0.7) ]
                 , width (shrink |> minimum 100)
+                , Border.solid
+                , Border.width 1
                 ]
                 { label = text menuText
                 , onPress =
@@ -251,7 +254,7 @@ viewTaskbar { mFocus, apps, processes } =
                             |> List.map
                                 (\{ name } ->
                                     el
-                                        [ mouseOver [ Background.color (rgb 0.2 0.2 0.2) ]
+                                        [ mouseOver [ Background.color (Colors.gray 0.2) ]
                                         , padding 10
                                         , width fill
                                         , Font.alignLeft
@@ -264,7 +267,7 @@ viewTaskbar { mFocus, apps, processes } =
                     [ padding 20
                     , spacing 10
                     , Background.color
-                        (rgb 1 1 1)
+                        Colors.white
                     ]
                     items
 
@@ -274,8 +277,9 @@ viewTaskbar { mFocus, apps, processes } =
     row
         [ width fill
         , height (fill |> maximum 64)
-        , Background.color (rgb 0.4 0.4 0.4)
+        , Background.color (Colors.gray 0.4)
         , padding 10
+        , spacing 8
         , above menu
         ]
         (menuButton
@@ -288,7 +292,10 @@ viewTaskbar { mFocus, apps, processes } =
 
 viewTaskbarProcess : Process -> Element Msg
 viewTaskbarProcess { app } =
-    text app.name
+    Input.button [ padding 10, Background.color (rgba 1 1 1 0.25) ]
+        { label = text app.name
+        , onPress = Nothing
+        }
 
 
 viewIcon : Icon -> Table.Id Icon -> Bool -> Element Msg
@@ -297,7 +304,7 @@ viewIcon { name, description, src } id selected =
         baseAttrs =
             [ spacing 10
             , mouseOver
-                [ Background.color (rgba 0.3 0.3 0.3 0.3)
+                [ Background.color (Colors.gray 0.3)
                 ]
             , width fill
             , Events.onClick
@@ -307,10 +314,7 @@ viewIcon { name, description, src } id selected =
         selectionAttrs =
             if selected then
                 [ Border.dotted
-
-                -- , Border.rounded 8
                 , Border.width 2
-                , padding 8
                 , width fill
                 , height fill
                 , Background.color (rgba 1 1 1 0.3)
@@ -336,7 +340,7 @@ viewIcon { name, description, src } id selected =
         ]
 
 
-quickGradient : { angle : Float, stepCount : Int, start : Element.Color, end : Element.Color } -> Attribute Msg
+quickGradient : { angle : Float, stepCount : Int, start : Color, end : Color } -> Attribute Msg
 quickGradient { angle, stepCount, start, end } =
     let
         ( dr, dg, db ) =
