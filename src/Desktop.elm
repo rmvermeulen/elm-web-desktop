@@ -319,11 +319,11 @@ viewIcon { name, description, src } id selected =
             else
                 []
 
-        selectionVisual =
+        selectionOutline =
             el selectionAttrs none
                 |> behindContent
     in
-    column (selectionVisual :: baseAttrs)
+    column (selectionOutline :: baseAttrs)
         [ image [ width (px 40), height (px 40), centerX ]
             { src = src
             , description = description
