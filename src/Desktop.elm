@@ -29,13 +29,25 @@ type alias App =
     }
 
 
+type WindowState
+    = Floating
+    | Maximized
+
+
 type alias Window =
     { title : String
     , x : Int
     , y : Int
     , w : Int
     , h : Int
+    , minimized : Bool
+    , state : WindowState
     }
+
+
+createWindow : String -> Int -> Int -> Window
+createWindow title x y =
+    Window title x y 300 200 False Floating
 
 
 type alias Process =
@@ -46,7 +58,7 @@ type alias Process =
 
 type Focus
     = TaskbarMenu
-    | DesktopIcon (Table.Id Icon)
+    | DesktopIcon IconId
 
 
 type alias Model =
@@ -57,12 +69,24 @@ type alias Model =
     }
 
 
+type alias IconId =
+    Table.Id Icon
+
+
+type alias ProcessId =
+    Table.Id Process
+
+
 type Msg
-    = StopProcess (Table.Id Process)
+    = StopProcess ProcessId
     | StartProcess App
     | ToggleSelect Focus
     | Select Focus
     | Deselect
+    | MinimizeWindow ProcessId
+    | UnMinimizeWindow ProcessId
+    | MaximizeWindow ProcessId
+    | UnMaximizeWindow ProcessId
 
 
 init : Model
@@ -102,7 +126,7 @@ init =
             let
                 process : String -> Process
                 process n =
-                    Process (createApp n) (Window n 100 100 400 200)
+                    Process (createApp n) (createWindow n 100 100)
             in
             Table.add (process "TextEditor") Table.empty
                 |> Tuple.first
@@ -131,7 +155,7 @@ update msg model =
         StartProcess app ->
             let
                 process =
-                    Process app (Window app.name 0 0 100 100)
+                    Process app (createWindow app.name 100 100)
 
                 processes =
                     Table.add process model.processes
@@ -162,6 +186,74 @@ update msg model =
         Deselect ->
             { model | mFocus = Nothing }
 
+        MinimizeWindow id ->
+            let
+                processes =
+                    Table.get id model.processes
+                        |> Maybe.map
+                            (\process ->
+                                let
+                                    { window } =
+                                        process
+                                in
+                                { process | window = { window | minimized = True } }
+                            )
+                        |> Maybe.map (\p -> Table.replace id p model.processes)
+                        |> Maybe.withDefault model.processes
+            in
+            { model | processes = processes }
+
+        UnMinimizeWindow id ->
+            let
+                processes =
+                    Table.get id model.processes
+                        |> Maybe.map
+                            (\process ->
+                                let
+                                    { window } =
+                                        process
+                                in
+                                { process | window = { window | minimized = False } }
+                            )
+                        |> Maybe.map (\p -> Table.replace id p model.processes)
+                        |> Maybe.withDefault model.processes
+            in
+            { model | processes = processes }
+
+        MaximizeWindow id ->
+            let
+                processes =
+                    Table.get id model.processes
+                        |> Maybe.map
+                            (\process ->
+                                let
+                                    { window } =
+                                        process
+                                in
+                                { process | window = { window | state = Maximized } }
+                            )
+                        |> Maybe.map (\p -> Table.replace id p model.processes)
+                        |> Maybe.withDefault model.processes
+            in
+            { model | processes = processes }
+
+        UnMaximizeWindow id ->
+            let
+                processes =
+                    Table.get id model.processes
+                        |> Maybe.map
+                            (\process ->
+                                let
+                                    { window } =
+                                        process
+                                in
+                                { process | window = { window | state = Floating } }
+                            )
+                        |> Maybe.map (\p -> Table.replace id p model.processes)
+                        |> Maybe.withDefault model.processes
+            in
+            { model | processes = processes }
+
 
 view : Model -> Element Msg
 view model =
@@ -169,7 +261,7 @@ view model =
         windows =
             model.processes
                 |> Table.pairs
-                |> List.map (\( id, proc ) -> viewProcess id proc)
+                |> List.map (\( id, proc ) -> viewProcessWindow id proc)
 
         icons =
             let
@@ -226,59 +318,93 @@ view model =
         ]
 
 
-viewProcess : Table.Id Process -> Process -> Element Msg
-viewProcess id { app, window } =
+viewProcessWindow : ProcessId -> Process -> Element Msg
+viewProcessWindow id { app, window } =
     let
-        { title, x, y, w, h } =
+        { title, x, y, w, h, minimized, state } =
             window
-
-        controls =
-            let
-                attrs =
-                    [ width (px 20)
-                    , height (px 20)
-                    , Background.color (gray 0.6)
-                    , Border.rounded 8
-                    ]
-            in
-            row [ width shrink, height (shrink |> minimum 25), spacing 2, padding 1 ]
-                [ Input.button attrs { label = text "-", onPress = Nothing }
-                , Input.button attrs { label = text "[]", onPress = Nothing }
-                , Input.button attrs { label = text "X", onPress = Just (StopProcess id) }
-                ]
-
-        header =
-            el [ width fill, height shrink, Background.color blue ] <|
-                row [ width fill ]
-                    [ el [ width fill ] <| text title
-                    , controls
-                    ]
-
-        body =
-            el
-                [ width (px w)
-                , height (px h)
-                , Background.color (gray 0.8)
-                ]
-            <|
-                text "This is the body"
-
-        footer =
-            el [ width (px w), height (px 20), Background.color (gray 0.5) ] <|
-                text "This is the footer"
-
-        fullWindow =
-            column
-                [ width shrink, height shrink ]
-                [ header
-                , body
-                , footer
-                ]
     in
-    el
-        [ paddingXY x y
-        ]
-        fullWindow
+    if minimized then
+        none
+
+    else
+        let
+            controls =
+                let
+                    attrs =
+                        [ width (px 20)
+                        , height (px 20)
+                        , Background.color (gray 0.6)
+                        , Border.rounded 8
+                        ]
+                in
+                row [ width shrink, height (shrink |> minimum 25), spacing 2, padding 1 ]
+                    [ Input.button attrs
+                        { label = text "-"
+                        , onPress =
+                            if minimized then
+                                Just (UnMinimizeWindow id)
+
+                            else
+                                Just (MinimizeWindow id)
+                        }
+                    , Input.button attrs
+                        { label = text "[]"
+                        , onPress =
+                            case state of
+                                Floating ->
+                                    Just (MaximizeWindow id)
+
+                                Maximized ->
+                                    Just (UnMaximizeWindow id)
+                        }
+                    , Input.button attrs { label = text "X", onPress = Just (StopProcess id) }
+                    ]
+
+            header =
+                el [ width fill, height shrink, Background.color blue ] <|
+                    row [ width fill ]
+                        [ el [ width fill ] <| text title
+                        , controls
+                        ]
+
+            body =
+                el
+                    [ width fill
+                    , height fill
+                    , Background.color (gray 0.8)
+                    ]
+                <|
+                    text "This is the body"
+
+            footer =
+                el [ width fill, height (px 20), Background.color (gray 0.5) ] <|
+                    text "This is the footer"
+        in
+        case state of
+            Floating ->
+                el
+                    [ paddingXY x y
+                    ]
+                <|
+                    column
+                        [ width (px w)
+                        , height (px h)
+                        ]
+                        [ header
+                        , body
+                        , footer
+                        ]
+
+            Maximized ->
+                column
+                    [ width fill
+                    , height fill
+                    ]
+                    [ header
+                    , body
+                    , footer
+                    ]
 
 
 viewTaskbar : Model -> Element Msg
@@ -353,21 +479,21 @@ viewTaskbar { mFocus, apps, processes } =
         ]
         (menuButton
             :: (processes
-                    |> Table.values
-                    |> List.map viewTaskbarProcess
+                    |> Table.pairs
+                    |> List.map (\( id, proc ) -> viewTaskbarProcess id proc)
                )
         )
 
 
-viewTaskbarProcess : Process -> Element Msg
-viewTaskbarProcess { app } =
+viewTaskbarProcess : ProcessId -> Process -> Element Msg
+viewTaskbarProcess id { app } =
     Input.button [ padding 10, Background.color (rgba 1 1 1 0.25) ]
         { label = text app.name
-        , onPress = Nothing
+        , onPress = Just (UnMinimizeWindow id)
         }
 
 
-viewIcon : Icon -> Table.Id Icon -> Bool -> Element Msg
+viewIcon : Icon -> IconId -> Bool -> Element Msg
 viewIcon { name, description, src } id selected =
     let
         baseAttrs =
