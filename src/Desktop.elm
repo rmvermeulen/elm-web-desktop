@@ -1,7 +1,7 @@
 module Desktop exposing (..)
 
 import Basics.Extra
-import Colors
+import Colors exposing (..)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -29,8 +29,18 @@ type alias App =
     }
 
 
+type alias Window =
+    { title : String
+    , x : Int
+    , y : Int
+    , w : Int
+    , h : Int
+    }
+
+
 type alias Process =
     { app : App
+    , window : Window
     }
 
 
@@ -89,7 +99,12 @@ init =
 
         processes : Table Process
         processes =
-            Table.add (Process <| createApp "TextEditor") Table.empty
+            let
+                process : String -> Process
+                process n =
+                    Process (createApp n) (Window n 100 100 400 200)
+            in
+            Table.add (process "TextEditor") Table.empty
                 |> Tuple.first
 
         apps : Table App
@@ -113,10 +128,13 @@ update msg model =
                 | processes = Table.remove id model.processes
             }
 
-        StartProcess program ->
+        StartProcess app ->
             let
+                process =
+                    Process app (Window app.name 0 0 100 100)
+
                 processes =
-                    Table.add (Process program) model.processes
+                    Table.add process model.processes
                         |> Tuple.first
             in
             { model
@@ -148,25 +166,10 @@ update msg model =
 view : Model -> Element Msg
 view model =
     let
-        background =
-            el
-                ([ width fill
-                 , height fill
-                 , quickGradient
-                    { angle = 0.05 * pi
-                    , stepCount = 32
-                    , start = rgb 0.2 0 0.4
-                    , end = rgb 0.6 0.6 1
-                    }
-                 , icons |> inFront
-                 ]
-                 -- ++ (if model.mFocus /= Nothing then
-                 --         [ Events.onClick Deselect ]
-                 --     else
-                 --         []
-                 --    )
-                )
-                none
+        windows =
+            model.processes
+                |> Table.values
+                |> List.map (.window >> viewWindow)
 
         icons =
             let
@@ -191,10 +194,31 @@ view model =
                     , spacing 10
                     , width
                         (shrink
-                            |> minimum 40
-                            |> maximum 250
+                            |> minimum 100
+                            |> maximum 200
                         )
                     ]
+
+        background =
+            el
+                ([ width fill
+                 , height fill
+                 , quickGradient
+                    { angle = 0.05 * pi
+                    , stepCount = 32
+                    , start = rgb 0.2 0 0.4
+                    , end = rgb 0.6 0.6 1
+                    }
+                 , icons |> inFront
+                 ]
+                    ++ (windows |> List.map inFront)
+                 -- ++ (if model.mFocus /= Nothing then
+                 --         [ Events.onClick Deselect ]
+                 --     else
+                 --         []
+                 --    )
+                )
+                none
     in
     column [ width fill, height fill ]
         [ background
@@ -210,6 +234,39 @@ viewProcess pid { app } =
             , row [] [ text "close", text "min", text "max" ]
             ]
         ]
+
+
+viewWindow : Window -> Element Msg
+viewWindow { title, x, y, w, h } =
+    let
+        header =
+            el [ width (px w), height shrink, Background.color blue ] <| text title
+
+        body =
+            el
+                [ width (px w)
+                , height (px h)
+                , Background.color (gray 0.8)
+                ]
+            <|
+                text "This is the body"
+
+        footer =
+            el [ width (px w), height (px 20), Background.color (gray 0.5) ] <|
+                text "This is the footer"
+
+        window =
+            column
+                [ width shrink, height shrink ]
+                [ header
+                , body
+                , footer
+                ]
+    in
+    el
+        [ paddingXY x y
+        ]
+        window
 
 
 viewTaskbar : Model -> Element Msg
@@ -235,7 +292,7 @@ viewTaskbar { mFocus, apps, processes } =
         menuButton =
             Input.button
                 [ padding 10
-                , mouseOver [ Background.color (Colors.gray 0.7) ]
+                , mouseOver [ Background.color (gray 0.7) ]
                 , width (shrink |> minimum 100)
                 , Border.solid
                 , Border.width 1
@@ -254,7 +311,7 @@ viewTaskbar { mFocus, apps, processes } =
                             |> List.map
                                 (\{ name } ->
                                     el
-                                        [ mouseOver [ Background.color (Colors.gray 0.2) ]
+                                        [ mouseOver [ Background.color (gray 0.2) ]
                                         , padding 10
                                         , width fill
                                         , Font.alignLeft
@@ -267,7 +324,7 @@ viewTaskbar { mFocus, apps, processes } =
                     [ padding 20
                     , spacing 10
                     , Background.color
-                        Colors.white
+                        white
                     ]
                     items
 
@@ -277,7 +334,7 @@ viewTaskbar { mFocus, apps, processes } =
     row
         [ width fill
         , height (fill |> maximum 64)
-        , Background.color (Colors.gray 0.4)
+        , Background.color (gray 0.4)
         , padding 10
         , spacing 8
         , above menu
@@ -304,7 +361,7 @@ viewIcon { name, description, src } id selected =
         baseAttrs =
             [ spacing 10
             , mouseOver
-                [ Background.color (Colors.gray 0.3)
+                [ Background.color (gray 0.3)
                 ]
             , width fill
             , Events.onClick
