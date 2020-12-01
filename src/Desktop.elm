@@ -239,8 +239,27 @@ viewProcess pid { app } =
 viewWindow : Window -> Element Msg
 viewWindow { title, x, y, w, h } =
     let
+        controls =
+            let
+                attrs =
+                    [ width (px 20)
+                    , height (px 20)
+                    , Background.color (gray 0.6)
+                    , Border.rounded 8
+                    ]
+            in
+            row [ width shrink, height (shrink |> minimum 25), spacing 2, padding 1 ]
+                [ Input.button attrs { label = text "-", onPress = Nothing }
+                , Input.button attrs { label = text "[]", onPress = Nothing }
+                , Input.button attrs { label = text "X", onPress = Nothing }
+                ]
+
         header =
-            el [ width (px w), height shrink, Background.color blue ] <| text title
+            el [ width fill, height shrink, Background.color blue ] <|
+                row [ width fill ]
+                    [ el [ width fill ] <| text title
+                    , controls
+                    ]
 
         body =
             el
