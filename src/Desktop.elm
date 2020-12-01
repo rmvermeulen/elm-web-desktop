@@ -168,8 +168,8 @@ view model =
     let
         windows =
             model.processes
-                |> Table.values
-                |> List.map (.window >> viewWindow)
+                |> Table.pairs
+                |> List.map (\( id, proc ) -> viewProcess id proc)
 
         icons =
             let
@@ -226,19 +226,12 @@ view model =
         ]
 
 
-viewProcess : Int -> Process -> Element Msg
-viewProcess pid { app } =
-    column []
-        [ row []
-            [ text app.name
-            , row [] [ text "close", text "min", text "max" ]
-            ]
-        ]
-
-
-viewWindow : Window -> Element Msg
-viewWindow { title, x, y, w, h } =
+viewProcess : Table.Id Process -> Process -> Element Msg
+viewProcess id { app, window } =
     let
+        { title, x, y, w, h } =
+            window
+
         controls =
             let
                 attrs =
@@ -251,7 +244,7 @@ viewWindow { title, x, y, w, h } =
             row [ width shrink, height (shrink |> minimum 25), spacing 2, padding 1 ]
                 [ Input.button attrs { label = text "-", onPress = Nothing }
                 , Input.button attrs { label = text "[]", onPress = Nothing }
-                , Input.button attrs { label = text "X", onPress = Nothing }
+                , Input.button attrs { label = text "X", onPress = Just (StopProcess id) }
                 ]
 
         header =
@@ -274,7 +267,7 @@ viewWindow { title, x, y, w, h } =
             el [ width (px w), height (px 20), Background.color (gray 0.5) ] <|
                 text "This is the footer"
 
-        window =
+        fullWindow =
             column
                 [ width shrink, height shrink ]
                 [ header
@@ -285,7 +278,7 @@ viewWindow { title, x, y, w, h } =
     el
         [ paddingXY x y
         ]
-        window
+        fullWindow
 
 
 viewTaskbar : Model -> Element Msg
