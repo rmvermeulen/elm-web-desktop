@@ -7,6 +7,7 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
+import Html exposing (Html)
 
 
 type alias Model =
@@ -26,17 +27,27 @@ type Msg
     = DesktopMsg Desktop.Msg
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         DesktopMsg desktopMsg ->
-            Desktop.update desktopMsg model
+            ( Desktop.update desktopMsg model
+            , Cmd.none
+            )
 
 
-view : Model -> Element Msg
+view : Model -> Html Msg
 view model =
-    Desktop.view model
-        |> map DesktopMsg
+    layout []
+        (Desktop.view model
+            |> map DesktopMsg
+        )
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Desktop.subscriptions model
+        |> Sub.map DesktopMsg
 
 
 
@@ -46,8 +57,8 @@ view model =
 main : Program Flags Model Msg
 main =
     Browser.element
-        { view = \model -> layout [] (view model)
+        { view = view
         , init = init
-        , update = \msg model -> ( update msg model, Cmd.none )
-        , subscriptions = always Sub.none
+        , update = update
+        , subscriptions = subscriptions
         }
