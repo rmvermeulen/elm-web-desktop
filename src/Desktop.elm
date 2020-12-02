@@ -1,6 +1,7 @@
 module Desktop exposing (..)
 
 import Basics.Extra
+import Browser.Events
 import Colors exposing (..)
 import Element exposing (..)
 import Element.Background as Background
@@ -8,6 +9,8 @@ import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
+import Json.Decode as Decode exposing (Decoder)
+import Json.Decode.Pipeline exposing (hardcoded, required)
 import List.Extra
 import Maybe.Extra
 import Set exposing (Set)
@@ -61,11 +64,17 @@ type Focus
     | DesktopIcon IconId
 
 
+type DragState
+    = DragStart Pid
+    | DragMove Pid Int Int
+
+
 type alias Model =
     { icons : Table Icon
     , mFocus : Maybe Focus
     , processes : Table Process
     , apps : Table App
+    , dragState : Maybe DragState
     }
 
 
@@ -73,20 +82,25 @@ type alias IconId =
     Table.Id Icon
 
 
-type alias ProcessId =
+type alias Pid =
     Table.Id Process
 
 
 type Msg
-    = StopProcess ProcessId
+    = StopProcess Pid
     | StartProcess App
     | ToggleSelect Focus
     | Select Focus
     | Deselect
-    | MinimizeWindow ProcessId
-    | UnMinimizeWindow ProcessId
-    | MaximizeWindow ProcessId
-    | UnMaximizeWindow ProcessId
+    | MinimizeWindow Pid
+    | UnMinimizeWindow Pid
+    | MaximizeWindow Pid
+    | UnMaximizeWindow Pid
+    | ResizeWindow Pid Int Int
+    | StartDragWindow Pid
+    | SetDragOffset Int Int
+    | StopDragWindow
+    | MoveDragWindow Int Int
 
 
 init : Model
@@ -141,7 +155,7 @@ init =
             appList
                 |> List.foldl addApp Table.empty
     in
-    Model icons Nothing processes apps
+    Model icons Nothing processes apps Nothing
 
 
 update : Msg -> Model -> Model
@@ -189,70 +203,97 @@ update msg model =
         MinimizeWindow id ->
             let
                 processes =
-                    Table.get id model.processes
-                        |> Maybe.map
-                            (\process ->
-                                let
-                                    { window } =
-                                        process
-                                in
-                                { process | window = { window | minimized = True } }
-                            )
-                        |> Maybe.map (\p -> Table.replace id p model.processes)
-                        |> Maybe.withDefault model.processes
+                    updateProcessWindow id (\window -> { window | minimized = True }) model.processes
             in
             { model | processes = processes }
 
         UnMinimizeWindow id ->
             let
                 processes =
-                    Table.get id model.processes
-                        |> Maybe.map
-                            (\process ->
-                                let
-                                    { window } =
-                                        process
-                                in
-                                { process | window = { window | minimized = False } }
-                            )
-                        |> Maybe.map (\p -> Table.replace id p model.processes)
-                        |> Maybe.withDefault model.processes
+                    updateProcessWindow id (\window -> { window | minimized = False }) model.processes
             in
             { model | processes = processes }
 
         MaximizeWindow id ->
             let
                 processes =
-                    Table.get id model.processes
-                        |> Maybe.map
-                            (\process ->
-                                let
-                                    { window } =
-                                        process
-                                in
-                                { process | window = { window | state = Maximized } }
-                            )
-                        |> Maybe.map (\p -> Table.replace id p model.processes)
-                        |> Maybe.withDefault model.processes
+                    updateProcessWindow id (\window -> { window | state = Maximized }) model.processes
             in
             { model | processes = processes }
 
         UnMaximizeWindow id ->
             let
                 processes =
-                    Table.get id model.processes
-                        |> Maybe.map
-                            (\process ->
-                                let
-                                    { window } =
-                                        process
-                                in
-                                { process | window = { window | state = Floating } }
-                            )
-                        |> Maybe.map (\p -> Table.replace id p model.processes)
-                        |> Maybe.withDefault model.processes
+                    updateProcessWindow id (\window -> { window | state = Floating }) model.processes
             in
             { model | processes = processes }
+
+        ResizeWindow id w h ->
+            let
+                processes =
+                    updateProcessWindow id
+                        (\window ->
+                            { window
+                                | w = w
+                                , h = h
+                            }
+                        )
+                        model.processes
+            in
+            { model | processes = processes }
+
+        StartDragWindow pid ->
+            { model | dragState = Just (DragStart pid) }
+
+        StopDragWindow ->
+            { model | dragState = Nothing }
+
+        SetDragOffset x y ->
+            let
+                dragState =
+                    model.dragState
+                        |> Maybe.map
+                            (\state ->
+                                case state of
+                                    DragStart pid ->
+                                        DragMove pid x y
+
+                                    DragMove pid _ _ ->
+                                        DragMove pid x y
+                            )
+            in
+            { model | dragState = dragState }
+
+        MoveDragWindow x y ->
+            case model.dragState of
+                Just (DragMove id offsetX offsetY) ->
+                    let
+                        processes =
+                            updateProcessWindow id
+                                (\window ->
+                                    { window
+                                        | x = x + offsetX
+                                        , y = y + offsetY
+                                    }
+                                )
+                                model.processes
+                    in
+                    { model | processes = processes }
+
+                Just (DragStart _) ->
+                    model
+
+                Nothing ->
+                    model
+
+
+updateProcessWindow : Pid -> (Window -> Window) -> Table Process -> Table Process
+updateProcessWindow id fn table =
+    Table.get id table
+        |> Maybe.map
+            (\process -> { process | window = fn process.window })
+        |> Maybe.map (\proc -> Table.replace id proc table)
+        |> Maybe.withDefault table
 
 
 view : Model -> Element Msg
@@ -318,7 +359,7 @@ view model =
         ]
 
 
-viewProcessWindow : ProcessId -> Process -> Element Msg
+viewProcessWindow : Pid -> Process -> Element Msg
 viewProcessWindow id { app, window } =
     let
         { title, x, y, w, h, minimized, state } =
@@ -362,7 +403,19 @@ viewProcessWindow id { app, window } =
                     ]
 
             header =
-                el [ width fill, height shrink, Background.color blue ] <|
+                el
+                    [ width fill
+                    , height shrink
+                    , Background.color (rgb 0 0 1)
+                    , mouseDown [ Background.color (rgb 0.2 0.2 1) ]
+                    , let
+                        -- TODO: get relative position
+                        dragState =
+                            DragStart id
+                      in
+                      Events.onMouseDown (StartDragWindow id)
+                    ]
+                <|
                     row [ width fill ]
                         [ el [ width fill ] <| text title
                         , controls
@@ -485,7 +538,7 @@ viewTaskbar { mFocus, apps, processes } =
         )
 
 
-viewTaskbarProcess : ProcessId -> Process -> Element Msg
+viewTaskbarProcess : Pid -> Process -> Element Msg
 viewTaskbarProcess id { app } =
     Input.button [ padding 10, Background.color (rgba 1 1 1 0.25) ]
         { label = text app.name
@@ -569,3 +622,43 @@ quickGradient { angle, stepCount, start, end } =
         { angle = angle
         , steps = steps
         }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions { dragState, processes } =
+    case dragState of
+        Just (DragMove pid x y) ->
+            let
+                decoder : Decoder Msg
+                decoder =
+                    Decode.succeed MoveDragWindow
+                        |> required "x" Decode.int
+                        |> required "y" Decode.int
+            in
+            Sub.batch
+                [ Browser.Events.onMouseMove decoder
+                , Browser.Events.onMouseUp (Decode.succeed StopDragWindow)
+                ]
+
+        Just (DragStart pid) ->
+            Table.get pid processes
+                |> Maybe.map
+                    (\{ window } ->
+                        let
+                            windowOffset x y =
+                                SetDragOffset (window.x - x) (window.y - y)
+
+                            decoder : Decoder Msg
+                            decoder =
+                                Decode.succeed windowOffset
+                                    |> required "x" Decode.int
+                                    |> required "y" Decode.int
+                        in
+                        Sub.batch
+                            [ Browser.Events.onMouseMove decoder
+                            ]
+                    )
+                |> Maybe.withDefault Sub.none
+
+        Nothing ->
+            Sub.none
