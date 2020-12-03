@@ -51,6 +51,26 @@ replace (Id id) info (Table nextId dict) =
     Table nextId (Dict.insert id info dict)
 
 
+map : (Id info -> info -> info) -> Table info -> Table info
+map fn table =
+    pairs table
+        |> List.map
+            (\( id, data ) ->
+                let
+                    updated =
+                        fn id data
+                in
+                ( id, updated )
+            )
+        |> (\items ->
+                let
+                    handler ( id, data ) acc =
+                        replace id data acc
+                in
+                List.foldl handler table items
+           )
+
+
 pairs : Table info -> List ( Id info, info )
 pairs (Table _ dict) =
     Dict.toList dict |> List.map (Tuple.mapFirst Id)
