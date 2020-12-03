@@ -31,9 +31,8 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         DesktopMsg desktopMsg ->
-            ( Desktop.update desktopMsg model
-            , Cmd.none
-            )
+            Desktop.update desktopMsg model
+                |> Tuple.mapSecond (Cmd.map DesktopMsg)
 
 
 view : Model -> Html Msg

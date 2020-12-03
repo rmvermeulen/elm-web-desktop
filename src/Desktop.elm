@@ -3,6 +3,7 @@ module Desktop exposing (..)
 import Basics.Extra
 import Browser.Events
 import Colors exposing (..)
+import Delay
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -23,6 +24,7 @@ type alias Icon =
     { name : String
     , description : String
     , src : String
+    , app : AppId
     }
 
 
@@ -75,8 +77,13 @@ type alias Model =
     , mFocus : Maybe Focus
     , processes : Table Process
     , apps : Table App
-    , dragState : Maybe DragState
+    , mDragState : Maybe DragState
+    , mActivatedIcon : Maybe IconId
     }
+
+
+type alias AppId =
+    Table.Id App
 
 
 type alias IconId =
@@ -102,6 +109,7 @@ type Msg
     | SetDragOffset Int Int
     | StopDragWindow
     | MoveDragWindow Int Int
+    | DeactivateIcon
 
 
 init : Model
@@ -119,21 +127,32 @@ init =
             , createApp "My favorite document(2) - final.jpg"
             ]
 
+        apps : Table App
+        apps =
+            let
+                addApp prog table =
+                    Table.add prog table
+                        |> Tuple.first
+            in
+            appList
+                |> List.foldl addApp Table.empty
+
         icons : Table Icon
         icons =
             let
-                addIcon : App -> Table Icon -> Table Icon
-                addIcon app table =
+                addIcon : ( AppId, App ) -> Table Icon -> Table Icon
+                addIcon ( appId, app ) table =
                     let
                         description =
                             "about:" ++ app.name
 
+                        icon : Icon
                         icon =
-                            Icon app.name description app.icon
+                            Icon app.name description app.icon appId
                     in
                     Table.add icon table |> Tuple.first
             in
-            appList
+            Table.pairs apps
                 |> List.foldl addIcon Table.empty
 
         processes : Table Process
@@ -149,27 +168,73 @@ init =
             Table.empty
                 |> add (process "TextEditor" 100 100)
                 |> add (process "Terminal" 125 125)
-
-        apps : Table App
-        apps =
-            let
-                addApp prog table =
-                    Table.add prog table
-                        |> Tuple.first
-            in
-            appList
-                |> List.foldl addApp Table.empty
     in
-    Model icons Nothing processes apps Nothing
+    Model icons Nothing processes apps Nothing Nothing
 
 
-update : Msg -> Model -> Model
+selectTarget : Focus -> Model -> ( Model, Cmd Msg )
+selectTarget target model =
+    let
+        delayedDeactivation =
+            Delay.after 350 Delay.Millisecond DeactivateIcon
+
+        withDelayedDeactivation m =
+            ( m, delayedDeactivation )
+    in
+    case target of
+        TaskbarMenu ->
+            -- select taskbar, deselect and deactivate icons
+            withDelayedDeactivation
+                { model
+                    | mFocus = Just target
+                    , mActivatedIcon = Nothing
+                }
+
+        DesktopIcon targetIcon ->
+            -- select icon, update active icon, possible start process
+            let
+                acceptedTarget =
+                    withDelayedDeactivation
+                        { model
+                            | mFocus = Just target
+                            , mActivatedIcon = Just targetIcon
+                        }
+            in
+            case model.mActivatedIcon of
+                Nothing ->
+                    acceptedTarget
+
+                Just activeIcon ->
+                    if activeIcon == targetIcon then
+                        -- double click same icon: activate icon
+                        Table.get targetIcon model.icons
+                            |> Maybe.andThen (\{ app } -> Table.get app model.apps)
+                            |> Maybe.map
+                                (\app ->
+                                    let
+                                        ( m, c ) =
+                                            update (StartProcess app) model
+                                    in
+                                    ( m, Cmd.batch [ c, delayedDeactivation ] )
+                                )
+                            |> Maybe.withDefault acceptedTarget
+
+                    else
+                        acceptedTarget
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        simply m =
+            ( m, Cmd.none )
+    in
     case msg of
         StopProcess id ->
-            { model
-                | processes = Table.remove id model.processes
-            }
+            simply
+                { model
+                    | processes = Table.remove id model.processes
+                }
 
         StartProcess app ->
             let
@@ -180,58 +245,59 @@ update msg model =
                     Table.add process model.processes
                         |> Tuple.first
             in
-            { model
-                | processes = processes
-            }
+            simply
+                { model
+                    | processes = processes
+                }
 
         ToggleSelect target ->
-            { model
-                | mFocus =
-                    case model.mFocus of
-                        Just focus ->
-                            if focus == target then
-                                Nothing
+            case model.mFocus of
+                Just focus ->
+                    if focus == target then
+                        -- select current target again, so deselect
+                        update Deselect model
 
-                            else
-                                Just target
+                    else
+                        -- different selection, select a new target
+                        update (Select target) model
 
-                        Nothing ->
-                            Just target
-            }
+                Nothing ->
+                    -- no current selection, select new target
+                    update (Select target) model
 
         Select target ->
-            { model | mFocus = Just target }
+            selectTarget target model
 
         Deselect ->
-            { model | mFocus = Nothing }
+            simply { model | mFocus = Nothing, mActivatedIcon = Nothing }
 
         MinimizeWindow id ->
             let
                 processes =
                     updateProcessWindow id (\window -> { window | minimized = True }) model.processes
             in
-            { model | processes = processes }
+            simply { model | processes = processes }
 
         UnMinimizeWindow id ->
             let
                 processes =
                     updateProcessWindow id (\window -> { window | minimized = False }) model.processes
             in
-            { model | processes = processes }
+            simply { model | processes = processes }
 
         MaximizeWindow id ->
             let
                 processes =
                     updateProcessWindow id (\window -> { window | state = Maximized }) model.processes
             in
-            { model | processes = processes }
+            simply { model | processes = processes }
 
         UnMaximizeWindow id ->
             let
                 processes =
                     updateProcessWindow id (\window -> { window | state = Floating }) model.processes
             in
-            { model | processes = processes }
+            simply { model | processes = processes }
 
         ResizeWindow id w h ->
             let
@@ -245,7 +311,7 @@ update msg model =
                         )
                         model.processes
             in
-            { model | processes = processes }
+            simply { model | processes = processes }
 
         StartDragWindow pid ->
             let
@@ -267,18 +333,19 @@ update msg model =
                                 { data | window = { window | depth = depth } }
                             )
             in
-            { model
-                | dragState = Just (DragStart pid)
-                , processes = reorderedProcesses
-            }
+            simply
+                { model
+                    | mDragState = Just (DragStart pid)
+                    , processes = reorderedProcesses
+                }
 
         StopDragWindow ->
-            { model | dragState = Nothing }
+            simply { model | mDragState = Nothing }
 
         SetDragOffset x y ->
             let
                 dragState =
-                    model.dragState
+                    model.mDragState
                         |> Maybe.map
                             (\state ->
                                 case state of
@@ -289,10 +356,10 @@ update msg model =
                                         DragMove pid x y
                             )
             in
-            { model | dragState = dragState }
+            simply { model | mDragState = dragState }
 
         MoveDragWindow x y ->
-            case model.dragState of
+            case model.mDragState of
                 Just (DragMove id offsetX offsetY) ->
                     let
                         processes =
@@ -305,13 +372,16 @@ update msg model =
                                 )
                                 model.processes
                     in
-                    { model | processes = processes }
+                    simply { model | processes = processes }
 
                 Just (DragStart _) ->
-                    model
+                    simply model
 
                 Nothing ->
-                    model
+                    simply model
+
+        DeactivateIcon ->
+            simply { model | mActivatedIcon = Nothing }
 
 
 updateProcessWindow : Pid -> (Window -> Window) -> Table Process -> Table Process
@@ -437,12 +507,7 @@ viewProcessWindow id { app, window } =
                     , height shrink
                     , Background.color (rgb 0 0 1)
                     , mouseDown [ Background.color (rgb 0.2 0.2 1) ]
-                    , let
-                        -- TODO: get relative position
-                        dragState =
-                            DragStart id
-                      in
-                      Events.onMouseDown (StartDragWindow id)
+                    , Events.onMouseDown (StartDragWindow id)
                     ]
                 <|
                     row [ width fill ]
@@ -652,8 +717,8 @@ quickGradient { angle, stepCount, start, end } =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions { dragState, processes } =
-    case dragState of
+subscriptions { mDragState, processes } =
+    case mDragState of
         Just (DragMove pid x y) ->
             let
                 decoder : Decoder Msg
