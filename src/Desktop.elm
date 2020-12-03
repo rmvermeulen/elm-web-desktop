@@ -138,12 +138,16 @@ init =
         processes : Table Process
         processes =
             let
-                process : String -> Process
-                process n =
-                    Process (createApp n) (createWindow n 100 100)
+                add p =
+                    Table.add p >> Tuple.first
+
+                process : String -> Int -> Int -> Process
+                process n wx wy =
+                    Process (createApp n) (createWindow n wx wy)
             in
-            Table.add (process "TextEditor") Table.empty
-                |> Tuple.first
+            Table.empty
+                |> add (process "TextEditor" 100 100)
+                |> add (process "Terminal" 125 125)
 
         apps : Table App
         apps =
