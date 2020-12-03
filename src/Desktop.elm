@@ -45,12 +45,13 @@ type alias Window =
     , h : Int
     , minimized : Bool
     , state : WindowState
+    , depth : Int
     }
 
 
 createWindow : String -> Int -> Int -> Window
 createWindow title x y =
-    Window title x y 300 200 False Floating
+    Window title x y 300 200 False Floating 0
 
 
 type alias Process =
@@ -247,7 +248,29 @@ update msg model =
             { model | processes = processes }
 
         StartDragWindow pid ->
-            { model | dragState = Just (DragStart pid) }
+            let
+                reorderedProcesses =
+                    model.processes
+                        |> Table.map
+                            (\id data ->
+                                let
+                                    { window } =
+                                        data
+
+                                    depth =
+                                        if id == pid then
+                                            0
+
+                                        else
+                                            window.depth + 1
+                                in
+                                { data | window = { window | depth = depth } }
+                            )
+            in
+            { model
+                | dragState = Just (DragStart pid)
+                , processes = reorderedProcesses
+            }
 
         StopDragWindow ->
             { model | dragState = Nothing }
@@ -306,6 +329,8 @@ view model =
         windows =
             model.processes
                 |> Table.pairs
+                |> List.sortBy (Tuple.second >> .window >> .depth)
+                |> List.reverse
                 |> List.map (\( id, proc ) -> viewProcessWindow id proc)
 
         icons =
