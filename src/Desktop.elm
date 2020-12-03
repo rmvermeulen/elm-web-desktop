@@ -436,18 +436,16 @@ viewProcessWindow id { app, window } =
         in
         case state of
             Floating ->
-                el
-                    [ paddingXY x y
+                column
+                    [ moveRight (toFloat x)
+                    , moveDown (toFloat y)
+                    , width (px w)
+                    , height (px h)
                     ]
-                <|
-                    column
-                        [ width (px w)
-                        , height (px h)
-                        ]
-                        [ header
-                        , body
-                        , footer
-                        ]
+                    [ header
+                    , body
+                    , footer
+                    ]
 
             Maximized ->
                 column
