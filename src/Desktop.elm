@@ -683,6 +683,7 @@ subscriptions { dragState, processes } =
                         in
                         Sub.batch
                             [ Browser.Events.onMouseMove decoder
+                            , Browser.Events.onMouseUp (Decode.succeed StopDragWindow)
                             ]
                     )
                 |> Maybe.withDefault Sub.none
