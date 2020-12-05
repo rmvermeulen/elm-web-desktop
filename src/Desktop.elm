@@ -16,8 +16,8 @@ import List.Extra
 import Maybe.Extra
 import Set exposing (Set)
 import Set.Extra
+import Store exposing (Store)
 import String.Extra
-import Table exposing (Table)
 
 
 type alias Icon =
@@ -73,25 +73,25 @@ type DragState
 
 
 type alias Model =
-    { icons : Table Icon
+    { icons : Store Icon
     , mFocus : Maybe Focus
-    , processes : Table Process
-    , apps : Table App
+    , processes : Store Process
+    , apps : Store App
     , mDragState : Maybe DragState
     , mActivatedIcon : Maybe IconId
     }
 
 
 type alias AppId =
-    Table.Id App
+    Store.Id App
 
 
 type alias IconId =
-    Table.Id Icon
+    Store.Id Icon
 
 
 type alias Pid =
-    Table.Id Process
+    Store.Id Process
 
 
 type Msg
@@ -127,20 +127,20 @@ init =
             , createApp "My favorite document(2) - final.jpg"
             ]
 
-        apps : Table App
+        apps : Store App
         apps =
             let
                 addApp prog table =
-                    Table.add prog table
-                        |> Tuple.first
+                    Store.add prog table
+                        |> Tuple.second
             in
             appList
-                |> List.foldl addApp Table.empty
+                |> List.foldl addApp Store.empty
 
-        icons : Table Icon
+        icons : Store Icon
         icons =
             let
-                addIcon : ( AppId, App ) -> Table Icon -> Table Icon
+                addIcon : ( AppId, App ) -> Store Icon -> Store Icon
                 addIcon ( appId, app ) table =
                     let
                         description =
@@ -150,22 +150,22 @@ init =
                         icon =
                             Icon app.name description app.icon appId
                     in
-                    Table.add icon table |> Tuple.first
+                    Store.add icon table |> Tuple.second
             in
-            Table.pairs apps
-                |> List.foldl addIcon Table.empty
+            Store.pairs apps
+                |> List.foldl addIcon Store.empty
 
-        processes : Table Process
+        processes : Store Process
         processes =
             let
                 add p =
-                    Table.add p >> Tuple.first
+                    Store.add p >> Tuple.second
 
                 process : String -> Int -> Int -> Process
                 process n wx wy =
                     Process (createApp n) (createWindow n wx wy)
             in
-            Table.empty
+            Store.empty
                 |> add (process "TextEditor" 100 100)
                 |> add (process "Terminal" 125 125)
     in
@@ -207,8 +207,8 @@ selectTarget target model =
                 Just activeIcon ->
                     if activeIcon == targetIcon then
                         -- double click same icon: activate icon
-                        Table.get targetIcon model.icons
-                            |> Maybe.andThen (\{ app } -> Table.get app model.apps)
+                        Store.get targetIcon model.icons
+                            |> Maybe.andThen (\{ app } -> Store.get app model.apps)
                             |> Maybe.map
                                 (\app ->
                                     let
@@ -233,7 +233,7 @@ update msg model =
         StopProcess id ->
             simply
                 { model
-                    | processes = Table.remove id model.processes
+                    | processes = Store.remove id model.processes
                 }
 
         StartProcess app ->
@@ -242,8 +242,8 @@ update msg model =
                     Process app (createWindow app.name 100 100)
 
                 processes =
-                    Table.add process model.processes
-                        |> Tuple.first
+                    Store.add process model.processes
+                        |> Tuple.second
             in
             simply
                 { model
@@ -317,7 +317,7 @@ update msg model =
             let
                 reorderedProcesses =
                     model.processes
-                        |> Table.map
+                        |> Store.map
                             (\id data ->
                                 let
                                     { window } =
@@ -384,12 +384,12 @@ update msg model =
             simply { model | mActivatedIcon = Nothing }
 
 
-updateProcessWindow : Pid -> (Window -> Window) -> Table Process -> Table Process
+updateProcessWindow : Pid -> (Window -> Window) -> Store Process -> Store Process
 updateProcessWindow id fn table =
-    Table.get id table
+    Store.get id table
         |> Maybe.map
             (\process -> { process | window = fn process.window })
-        |> Maybe.map (\proc -> Table.replace id proc table)
+        |> Maybe.map (\proc -> Store.replace id proc table)
         |> Maybe.withDefault table
 
 
@@ -398,7 +398,7 @@ view model =
     let
         windows =
             model.processes
-                |> Table.pairs
+                |> Store.pairs
                 |> List.sortBy (Tuple.second >> .window >> .depth)
                 |> List.reverse
                 |> List.map (\( id, proc ) -> viewProcessWindow id proc)
@@ -419,7 +419,7 @@ view model =
                     viewIcon icon key selected
             in
             model.icons
-                |> Table.pairs
+                |> Store.pairs
                 |> List.map renderIcon
                 |> column
                     [ padding 20
@@ -590,7 +590,7 @@ viewTaskbar { mFocus, apps, processes } =
                 let
                     items =
                         apps
-                            |> Table.values
+                            |> Store.values
                             |> List.map
                                 (\{ name } ->
                                     el
@@ -624,7 +624,7 @@ viewTaskbar { mFocus, apps, processes } =
         ]
         (menuButton
             :: (processes
-                    |> Table.pairs
+                    |> Store.pairs
                     |> List.map (\( id, proc ) -> viewTaskbarProcess id proc)
                )
         )
@@ -733,7 +733,7 @@ subscriptions { mDragState, processes } =
                 ]
 
         Just (DragStart pid) ->
-            Table.get pid processes
+            Store.get pid processes
                 |> Maybe.map
                     (\{ window } ->
                         let
