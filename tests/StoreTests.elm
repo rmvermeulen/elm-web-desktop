@@ -56,6 +56,20 @@ storeModule =
 
                 else
                     Expect.fail "Could not replace id"
+        , test "Store.mapSingle" <|
+            \_ ->
+                let
+                    ( id, store ) =
+                        Store.add "Some value" Store.empty
+
+                    newStore =
+                        Store.mapSingle id (\_ -> "Different value") store
+                in
+                if Store.member id store then
+                    Expect.equal (Store.values newStore) [ "Different value" ]
+
+                else
+                    Expect.fail "Could not mapSingle at id"
         , test "Store.values" <|
             \_ ->
                 let

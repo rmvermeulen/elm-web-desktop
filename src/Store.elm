@@ -90,3 +90,11 @@ map fn (Store storeId storeDict) =
             Dict.foldl mapper Dict.empty storeDict
     in
     Store storeId newDict
+
+
+mapSingle : Id data -> (data -> data) -> Store data -> Store data
+mapSingle (Id id) fn (Store storeId storeDict) =
+    Dict.get id storeDict
+        |> Maybe.map (\value -> Dict.insert id (fn value) storeDict)
+        |> Maybe.withDefault storeDict
+        |> Store storeId
