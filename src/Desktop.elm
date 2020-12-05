@@ -66,10 +66,10 @@ type Focus
 
 
 type App
-    = Game Game.Model String
-    | ImageEditor ImageEditor.Model String
-    | Terminal Terminal.Model String
-    | TextEditor TextEditor.Model String
+    = Game Game.Model
+    | ImageEditor ImageEditor.Model
+    | Terminal Terminal.Model
+    | TextEditor TextEditor.Model
 
 
 type DragState
@@ -115,6 +115,10 @@ type Msg
     | StopDragWindow
     | MoveDragWindow Int Int
     | DeactivateIcon
+    | GameMsg Pid Game.Msg
+    | TextEditorMsg Pid TextEditor.Msg
+    | ImageEditorMsg Pid ImageEditor.Msg
+    | TerminalMsg Pid Terminal.Msg
 
 
 init : Model
@@ -127,10 +131,10 @@ init =
                     Store.add prog table
                         |> Tuple.second
             in
-            [ TextEditor TextEditor.init "logo.svg"
-            , ImageEditor ImageEditor.init "logo.svg"
-            , Terminal Terminal.init "logo.svg"
-            , Game Game.init "logo.svg"
+            [ TextEditor TextEditor.init
+            , ImageEditor ImageEditor.init
+            , Terminal Terminal.init
+            , Game Game.init
             ]
                 |> List.foldl addApp Store.empty
 
@@ -168,32 +172,32 @@ init =
 appIconPath : App -> String
 appIconPath app =
     case app of
-        Game _ iconPath ->
-            iconPath
+        Game _ ->
+            "logo.svg"
 
-        ImageEditor _ iconPath ->
-            iconPath
+        ImageEditor _ ->
+            "logo.svg"
 
-        Terminal _ iconPath ->
-            iconPath
+        Terminal _ ->
+            "logo.svg"
 
-        TextEditor _ iconPath ->
-            iconPath
+        TextEditor _ ->
+            "logo.svg"
 
 
 appName : App -> String
 appName app =
     case app of
-        Game _ _ ->
+        Game _ ->
             "Game"
 
-        ImageEditor _ _ ->
+        ImageEditor _ ->
             "ImageEditor"
 
-        Terminal _ _ ->
+        Terminal _ ->
             "Terminal"
 
-        TextEditor _ _ ->
+        TextEditor _ ->
             "TextEditor"
 
 
@@ -416,6 +420,118 @@ update msg model =
         DeactivateIcon ->
             simply { model | mActivatedIcon = Nothing }
 
+        GameMsg pid gameMsg ->
+            model.processes
+                |> Store.get pid
+                |> Maybe.map
+                    (\proc ->
+                        let
+                            ( app, cmd ) =
+                                case proc.app of
+                                    Game gameModel ->
+                                        let
+                                            ( newGameModel, gameCmd ) =
+                                                Game.update gameMsg gameModel
+                                        in
+                                        ( Game newGameModel, gameCmd |> Cmd.map (GameMsg pid) )
+
+                                    _ ->
+                                        ( proc.app, Cmd.none )
+
+                            newProc =
+                                { proc | app = app }
+
+                            processes =
+                                Store.replace pid newProc model.processes
+                        in
+                        ( { model | processes = processes }, cmd )
+                    )
+                |> Maybe.withDefault (simply model)
+
+        TextEditorMsg pid textEditorMsg ->
+            model.processes
+                |> Store.get pid
+                |> Maybe.map
+                    (\proc ->
+                        let
+                            ( app, cmd ) =
+                                case proc.app of
+                                    TextEditor textEditorModel ->
+                                        let
+                                            ( newTextEditorModel, textEditorCmd ) =
+                                                TextEditor.update textEditorMsg textEditorModel
+                                        in
+                                        ( TextEditor newTextEditorModel, textEditorCmd |> Cmd.map (TextEditorMsg pid) )
+
+                                    _ ->
+                                        ( proc.app, Cmd.none )
+
+                            newProc =
+                                { proc | app = app }
+
+                            processes =
+                                Store.replace pid newProc model.processes
+                        in
+                        ( { model | processes = processes }, cmd )
+                    )
+                |> Maybe.withDefault (simply model)
+
+        ImageEditorMsg pid imageEditorMsg ->
+            model.processes
+                |> Store.get pid
+                |> Maybe.map
+                    (\proc ->
+                        let
+                            ( app, cmd ) =
+                                case proc.app of
+                                    ImageEditor imageEditorModel ->
+                                        let
+                                            ( newImageEditorModel, imageEditorCmd ) =
+                                                ImageEditor.update imageEditorMsg imageEditorModel
+                                        in
+                                        ( ImageEditor newImageEditorModel, imageEditorCmd |> Cmd.map (ImageEditorMsg pid) )
+
+                                    _ ->
+                                        ( proc.app, Cmd.none )
+
+                            newProc =
+                                { proc | app = app }
+
+                            processes =
+                                Store.replace pid newProc model.processes
+                        in
+                        ( { model | processes = processes }, cmd )
+                    )
+                |> Maybe.withDefault (simply model)
+
+        TerminalMsg pid terminalMsg ->
+            model.processes
+                |> Store.get pid
+                |> Maybe.map
+                    (\proc ->
+                        let
+                            ( app, cmd ) =
+                                case proc.app of
+                                    Terminal terminalModel ->
+                                        let
+                                            ( newTerminalModel, terminalCmd ) =
+                                                Terminal.update terminalMsg terminalModel
+                                        in
+                                        ( Terminal newTerminalModel, terminalCmd |> Cmd.map (TerminalMsg pid) )
+
+                                    _ ->
+                                        ( proc.app, Cmd.none )
+
+                            newProc =
+                                { proc | app = app }
+
+                            processes =
+                                Store.replace pid newProc model.processes
+                        in
+                        ( { model | processes = processes }, cmd )
+                    )
+                |> Maybe.withDefault (simply model)
+
 
 updateProcessWindow : Pid -> (Window -> Window) -> Store Process -> Store Process
 updateProcessWindow id fn table =
@@ -491,8 +607,30 @@ view model =
         ]
 
 
+viewApp : App -> Pid -> Element Msg
+viewApp app pid =
+    el
+        [ width fill
+        , height fill
+        , Background.color (gray 0.8)
+        ]
+    <|
+        case app of
+            Game model ->
+                Game.view model |> map (GameMsg pid)
+
+            ImageEditor model ->
+                ImageEditor.view model |> map (ImageEditorMsg pid)
+
+            Terminal model ->
+                Terminal.view model |> map (TerminalMsg pid)
+
+            TextEditor model ->
+                TextEditor.view model |> map (TextEditorMsg pid)
+
+
 viewProcessWindow : Pid -> Process -> Element Msg
-viewProcessWindow id { app, window } =
+viewProcessWindow pid { app, window } =
     let
         { title, x, y, w, h, minimized, state } =
             window
@@ -516,22 +654,22 @@ viewProcessWindow id { app, window } =
                         { label = text "-"
                         , onPress =
                             if minimized then
-                                Just (UnMinimizeWindow id)
+                                Just (UnMinimizeWindow pid)
 
                             else
-                                Just (MinimizeWindow id)
+                                Just (MinimizeWindow pid)
                         }
                     , Input.button attrs
                         { label = text "[]"
                         , onPress =
                             case state of
                                 Floating ->
-                                    Just (MaximizeWindow id)
+                                    Just (MaximizeWindow pid)
 
                                 Maximized ->
-                                    Just (UnMaximizeWindow id)
+                                    Just (UnMaximizeWindow pid)
                         }
-                    , Input.button attrs { label = text "X", onPress = Just (StopProcess id) }
+                    , Input.button attrs { label = text "X", onPress = Just (StopProcess pid) }
                     ]
 
             header =
@@ -540,7 +678,7 @@ viewProcessWindow id { app, window } =
                     , height shrink
                     , Background.color (rgb 0 0 1)
                     , mouseDown [ Background.color (rgb 0.2 0.2 1) ]
-                    , Events.onMouseDown (StartDragWindow id)
+                    , Events.onMouseDown (StartDragWindow pid)
                     ]
                 <|
                     row [ width fill ]
@@ -549,13 +687,7 @@ viewProcessWindow id { app, window } =
                         ]
 
             body =
-                el
-                    [ width fill
-                    , height fill
-                    , Background.color (gray 0.8)
-                    ]
-                <|
-                    text "This is the body"
+                viewApp app pid
 
             footer =
                 el [ width fill, height (px 20), Background.color (gray 0.5) ] <|
