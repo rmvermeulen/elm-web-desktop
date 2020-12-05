@@ -1,5 +1,9 @@
 module Desktop exposing (..)
 
+import App.Game as Game
+import App.ImageEditor as ImageEditor
+import App.Terminal as Terminal
+import App.TextEditor as TextEditor
 import Basics.Extra
 import Browser.Events
 import Colors exposing (..)
@@ -28,12 +32,6 @@ type alias Icon =
     }
 
 
-type alias App =
-    { name : String
-    , icon : String
-    }
-
-
 type WindowState
     = Floating
     | Maximized
@@ -57,8 +55,8 @@ createWindow title x y =
 
 
 type alias Process =
-    { app : App
-    , window : Window
+    { window : Window
+    , app : App
     }
 
 
@@ -67,16 +65,23 @@ type Focus
     | DesktopIcon IconId
 
 
+type App
+    = Game Game.Model String
+    | ImageEditor ImageEditor.Model String
+    | Terminal Terminal.Model String
+    | TextEditor TextEditor.Model String
+
+
 type DragState
     = DragStart Pid
     | DragMove Pid Int Int
 
 
 type alias Model =
-    { icons : Store Icon
-    , mFocus : Maybe Focus
+    { apps : Store App
+    , icons : Store Icon
     , processes : Store Process
-    , apps : Store App
+    , mFocus : Maybe Focus
     , mDragState : Maybe DragState
     , mActivatedIcon : Maybe IconId
     }
@@ -115,18 +120,6 @@ type Msg
 init : Model
 init =
     let
-        createApp name =
-            App name "logo.svg"
-
-        appList =
-            [ createApp "Text Editor"
-            , createApp "Image Editor"
-            , createApp "Shooter Game"
-            , createApp "Terminal"
-            , createApp "Photos"
-            , createApp "My favorite document(2) - final.jpg"
-            ]
-
         apps : Store App
         apps =
             let
@@ -134,7 +127,11 @@ init =
                     Store.add prog table
                         |> Tuple.second
             in
-            appList
+            [ TextEditor TextEditor.init "logo.svg"
+            , ImageEditor ImageEditor.init "logo.svg"
+            , Terminal Terminal.init "logo.svg"
+            , Game Game.init "logo.svg"
+            ]
                 |> List.foldl addApp Store.empty
 
         icons : Store Icon
@@ -143,12 +140,18 @@ init =
                 addIcon : ( AppId, App ) -> Store Icon -> Store Icon
                 addIcon ( appId, app ) table =
                     let
+                        name =
+                            appName app
+
+                        iconPath =
+                            appIconPath app
+
                         description =
-                            "about:" ++ app.name
+                            "about:" ++ name
 
                         icon : Icon
                         icon =
-                            Icon app.name description app.icon appId
+                            Icon name description iconPath appId
                     in
                     Store.add icon table |> Tuple.second
             in
@@ -157,19 +160,41 @@ init =
 
         processes : Store Process
         processes =
-            let
-                add p =
-                    Store.add p >> Tuple.second
-
-                process : String -> Int -> Int -> Process
-                process n wx wy =
-                    Process (createApp n) (createWindow n wx wy)
-            in
             Store.empty
-                |> add (process "TextEditor" 100 100)
-                |> add (process "Terminal" 125 125)
     in
-    Model icons Nothing processes apps Nothing Nothing
+    Model apps icons processes Nothing Nothing Nothing
+
+
+appIconPath : App -> String
+appIconPath app =
+    case app of
+        Game _ iconPath ->
+            iconPath
+
+        ImageEditor _ iconPath ->
+            iconPath
+
+        Terminal _ iconPath ->
+            iconPath
+
+        TextEditor _ iconPath ->
+            iconPath
+
+
+appName : App -> String
+appName app =
+    case app of
+        Game _ _ ->
+            "Game"
+
+        ImageEditor _ _ ->
+            "ImageEditor"
+
+        Terminal _ _ ->
+            "Terminal"
+
+        TextEditor _ _ ->
+            "TextEditor"
 
 
 selectTarget : Focus -> Model -> ( Model, Cmd Msg )
@@ -238,8 +263,16 @@ update msg model =
 
         StartProcess app ->
             let
+                process : Process
                 process =
-                    Process app (createWindow app.name 100 100)
+                    let
+                        title =
+                            appName app
+
+                        window =
+                            createWindow title 100 100
+                    in
+                    Process window app
 
                 processes =
                     Store.add process model.processes
@@ -591,8 +624,9 @@ viewTaskbar { mFocus, apps, processes } =
                     items =
                         apps
                             |> Store.values
+                            |> List.map appName
                             |> List.map
-                                (\{ name } ->
+                                (\name ->
                                     el
                                         [ mouseOver [ Background.color (gray 0.2) ]
                                         , padding 10
@@ -633,7 +667,7 @@ viewTaskbar { mFocus, apps, processes } =
 viewTaskbarProcess : Pid -> Process -> Element Msg
 viewTaskbarProcess id { app } =
     Input.button [ padding 10, Background.color (rgba 1 1 1 0.25) ]
-        { label = text app.name
+        { label = text (appName app)
         , onPress = Just (UnMinimizeWindow id)
         }
 
