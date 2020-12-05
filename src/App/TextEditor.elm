@@ -10,9 +10,9 @@ type alias Model =
     }
 
 
-init : Model
+init : ( Model, Cmd Msg )
 init =
-    Model [] (UndoList.fresh [])
+    ( Model [] (UndoList.fresh []), Cmd.none )
 
 
 type Msg

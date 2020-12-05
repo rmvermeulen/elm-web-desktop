@@ -25,10 +25,10 @@ import String.Extra
 
 
 type alias Icon =
-    { name : String
+    { app : App
+    , name : String
     , description : String
     , src : String
-    , app : AppId
     }
 
 
@@ -56,7 +56,7 @@ createWindow title x y =
 
 type alias Process =
     { window : Window
-    , app : App
+    , data : AppData
     }
 
 
@@ -66,10 +66,17 @@ type Focus
 
 
 type App
-    = Game Game.Model
-    | ImageEditor ImageEditor.Model
-    | Terminal Terminal.Model
-    | TextEditor TextEditor.Model
+    = TextEditor
+    | ImageEditor
+    | Terminal
+    | Game
+
+
+type AppData
+    = TextEditorData TextEditor.Model
+    | ImageEditorData ImageEditor.Model
+    | TerminalData Terminal.Model
+    | GameData Game.Model
 
 
 type DragState
@@ -78,8 +85,7 @@ type DragState
 
 
 type alias Model =
-    { apps : Store App
-    , icons : Store Icon
+    { icons : Store Icon
     , processes : Store Process
     , mFocus : Maybe Focus
     , mDragState : Maybe DragState
@@ -121,84 +127,89 @@ type Msg
     | TerminalMsg Pid Terminal.Msg
 
 
-init : Model
+init : ( Model, Cmd Msg )
 init =
     let
-        apps : Store App
-        apps =
-            let
-                addApp prog table =
-                    Store.add prog table
-                        |> Tuple.second
-            in
-            [ TextEditor TextEditor.init
-            , ImageEditor ImageEditor.init
-            , Terminal Terminal.init
-            , Game Game.init
-            ]
-                |> List.foldl addApp Store.empty
-
         icons : Store Icon
         icons =
             let
-                addIcon : ( AppId, App ) -> Store Icon -> Store Icon
-                addIcon ( appId, app ) table =
-                    let
-                        name =
-                            appName app
+                getInfo : App -> ( String, String )
+                getInfo app =
+                    ( appName app, appIconPath app )
 
-                        iconPath =
-                            appIconPath app
+                addIcon : App -> Store Icon -> Store Icon
+                addIcon app table =
+                    let
+                        ( name, iconPath ) =
+                            getInfo app
 
                         description =
                             "about:" ++ name
 
                         icon : Icon
                         icon =
-                            Icon name description iconPath appId
+                            Icon app name description iconPath
                     in
                     Store.add icon table |> Tuple.second
             in
-            Store.pairs apps
+            [ TextEditor, ImageEditor, Terminal, Game ]
                 |> List.foldl addIcon Store.empty
 
         processes : Store Process
         processes =
             Store.empty
     in
-    Model apps icons processes Nothing Nothing Nothing
+    ( Model icons processes Nothing Nothing Nothing
+    , Cmd.none
+    )
+
+
+appDataType : AppData -> App
+appDataType data =
+    case data of
+        TextEditorData _ ->
+            TextEditor
+
+        ImageEditorData _ ->
+            ImageEditor
+
+        TerminalData _ ->
+            Terminal
+
+        GameData _ ->
+            Game
 
 
 appIconPath : App -> String
 appIconPath app =
     case app of
-        Game _ ->
+        TextEditor ->
             "logo.svg"
 
-        ImageEditor _ ->
+        ImageEditor ->
             "logo.svg"
 
-        Terminal _ ->
+        Terminal ->
             "logo.svg"
 
-        TextEditor _ ->
+        Game ->
             "logo.svg"
 
 
 appName : App -> String
 appName app =
     case app of
-        Game _ ->
-            "Game"
+        TextEditor ->
+            "TextEditor"
 
-        ImageEditor _ ->
+        ImageEditor ->
             "ImageEditor"
 
-        Terminal _ ->
+        Terminal ->
             "Terminal"
 
-        TextEditor _ ->
-            "TextEditor"
+        Game ->
+            "Game"
 
 
 selectTarget : Focus -> Model -> ( Model, Cmd Msg )
@@ -237,9 +248,8 @@ selectTarget target model =
                     if activeIcon == targetIcon then
                         -- double click same icon: activate icon
                         Store.get targetIcon model.icons
-                            |> Maybe.andThen (\{ app } -> Store.get app model.apps)
                             |> Maybe.map
-                                (\app ->
+                                (\{ app } ->
                                     let
                                         ( m, c ) =
                                             update (StartProcess app) model
@@ -267,8 +277,7 @@ update msg model =
 
         StartProcess app ->
             let
-                process : Process
-                process =
+                ( newProcess, createCmd ) =
                     let
                         title =
                             appName app
@@ -276,16 +285,35 @@ update msg model =
                         window =
                             createWindow title 100 100
                     in
-                    Process window app
+                    case app of
+                        TextEditor ->
+                            TextEditor.init
+                                |> Tuple.mapBoth
+                                    (\data -> TextEditorData data |> Process window)
+                                    (\cmd -> \pid -> Cmd.map (TextEditorMsg pid) cmd)
 
-                processes =
-                    Store.add process model.processes
-                        |> Tuple.second
+                        ImageEditor ->
+                            ImageEditor.init
+                                |> Tuple.mapBoth
+                                    (\data -> ImageEditorData data |> Process window)
+                                    (\cmd -> \pid -> Cmd.map (ImageEditorMsg pid) cmd)
+
+                        Terminal ->
+                            Terminal.init
+                                |> Tuple.mapBoth
+                                    (\data -> TerminalData data |> Process window)
+                                    (\cmd -> \pid -> Cmd.map (TerminalMsg pid) cmd)
+
+                        Game ->
+                            Game.init
+                                |> Tuple.mapBoth
+                                    (\data -> GameData data |> Process window)
+                                    (\cmd -> \pid -> Cmd.map (GameMsg pid) cmd)
+
+                ( newPid, processes ) =
+                    Store.add newProcess model.processes
             in
-            simply
-                { model
-                    | processes = processes
-                }
+            ( { model | processes = processes }, createCmd newPid )
 
         ToggleSelect target ->
             case model.mFocus of
@@ -426,20 +454,20 @@ update msg model =
                 |> Maybe.map
                     (\proc ->
                         let
-                            ( app, cmd ) =
-                                case proc.app of
-                                    Game gameModel ->
+                            ( data, cmd ) =
+                                case proc.data of
+                                    GameData gameModel ->
                                         let
                                             ( newGameModel, gameCmd ) =
                                                 Game.update gameMsg gameModel
                                         in
-                                        ( Game newGameModel, gameCmd |> Cmd.map (GameMsg pid) )
+                                        ( GameData newGameModel, gameCmd |> Cmd.map (GameMsg pid) )
 
                                     _ ->
-                                        ( proc.app, Cmd.none )
+                                        ( proc.data, Cmd.none )
 
                             newProc =
-                                { proc | app = app }
+                                { proc | data = data }
 
                             processes =
                                 Store.replace pid newProc model.processes
@@ -454,20 +482,20 @@ update msg model =
                 |> Maybe.map
                     (\proc ->
                         let
-                            ( app, cmd ) =
-                                case proc.app of
-                                    TextEditor textEditorModel ->
+                            ( data, cmd ) =
+                                case proc.data of
+                                    TextEditorData textEditorModel ->
                                         let
                                             ( newTextEditorModel, textEditorCmd ) =
                                                 TextEditor.update textEditorMsg textEditorModel
                                         in
-                                        ( TextEditor newTextEditorModel, textEditorCmd |> Cmd.map (TextEditorMsg pid) )
+                                        ( TextEditorData newTextEditorModel, textEditorCmd |> Cmd.map (TextEditorMsg pid) )
 
                                     _ ->
-                                        ( proc.app, Cmd.none )
+                                        ( proc.data, Cmd.none )
 
                             newProc =
-                                { proc | app = app }
+                                { proc | data = data }
 
                             processes =
                                 Store.replace pid newProc model.processes
@@ -482,20 +510,20 @@ update msg model =
                 |> Maybe.map
                     (\proc ->
                         let
-                            ( app, cmd ) =
-                                case proc.app of
-                                    ImageEditor imageEditorModel ->
+                            ( data, cmd ) =
+                                case proc.data of
+                                    ImageEditorData imageEditorModel ->
                                         let
                                             ( newImageEditorModel, imageEditorCmd ) =
                                                 ImageEditor.update imageEditorMsg imageEditorModel
                                         in
-                                        ( ImageEditor newImageEditorModel, imageEditorCmd |> Cmd.map (ImageEditorMsg pid) )
+                                        ( ImageEditorData newImageEditorModel, imageEditorCmd |> Cmd.map (ImageEditorMsg pid) )
 
                                     _ ->
-                                        ( proc.app, Cmd.none )
+                                        ( proc.data, Cmd.none )
 
                             newProc =
-                                { proc | app = app }
+                                { proc | data = data }
 
                             processes =
                                 Store.replace pid newProc model.processes
@@ -510,20 +538,20 @@ update msg model =
                 |> Maybe.map
                     (\proc ->
                         let
-                            ( app, cmd ) =
-                                case proc.app of
-                                    Terminal terminalModel ->
+                            ( data, cmd ) =
+                                case proc.data of
+                                    TerminalData terminalModel ->
                                         let
                                             ( newTerminalModel, terminalCmd ) =
                                                 Terminal.update terminalMsg terminalModel
                                         in
-                                        ( Terminal newTerminalModel, terminalCmd |> Cmd.map (TerminalMsg pid) )
+                                        ( TerminalData newTerminalModel, terminalCmd |> Cmd.map (TerminalMsg pid) )
 
                                     _ ->
-                                        ( proc.app, Cmd.none )
+                                        ( proc.data, Cmd.none )
 
                             newProc =
-                                { proc | app = app }
+                                { proc | data = data }
 
                             processes =
                                 Store.replace pid newProc model.processes
@@ -607,30 +635,30 @@ view model =
         ]
 
 
-viewApp : App -> Pid -> Element Msg
-viewApp app pid =
+viewApp : Pid -> AppData -> Element Msg
+viewApp pid data =
     el
         [ width fill
         , height fill
         , Background.color (gray 0.8)
         ]
     <|
-        case app of
-            Game model ->
+        case data of
+            GameData model ->
                 Game.view model |> map (GameMsg pid)
 
-            ImageEditor model ->
+            ImageEditorData model ->
                 ImageEditor.view model |> map (ImageEditorMsg pid)
 
-            Terminal model ->
+            TerminalData model ->
                 Terminal.view model |> map (TerminalMsg pid)
 
-            TextEditor model ->
+            TextEditorData model ->
                 TextEditor.view model |> map (TextEditorMsg pid)
 
 
 viewProcessWindow : Pid -> Process -> Element Msg
-viewProcessWindow pid { app, window } =
+viewProcessWindow pid { data, window } =
     let
         { title, x, y, w, h, minimized, state } =
             window
@@ -687,7 +715,7 @@ viewProcessWindow pid { app, window } =
                         ]
 
             body =
-                viewApp app pid
+                viewApp pid data
 
             footer =
                 el [ width fill, height (px 20), Background.color (gray 0.5) ] <|
@@ -718,7 +746,7 @@ viewProcessWindow pid { app, window } =
 
 
 viewTaskbar : Model -> Element Msg
-viewTaskbar { mFocus, apps, processes } =
+viewTaskbar { mFocus, processes } =
     let
         selected =
             case mFocus of
@@ -754,8 +782,7 @@ viewTaskbar { mFocus, apps, processes } =
             if selected then
                 let
                     items =
-                        apps
-                            |> Store.values
+                        [ TextEditor, ImageEditor, Terminal, Game ]
                             |> List.map appName
                             |> List.map
                                 (\name ->
@@ -797,9 +824,13 @@ viewTaskbar { mFocus, apps, processes } =
 
 
 viewTaskbarProcess : Pid -> Process -> Element Msg
-viewTaskbarProcess id { app } =
+viewTaskbarProcess id { data } =
     Input.button [ padding 10, Background.color (rgba 1 1 1 0.25) ]
-        { label = text (appName app)
+        { label =
+            data
+                |> appDataType
+                |> appName
+                |> text
         , onPress = Just (UnMinimizeWindow id)
         }
 

@@ -20,7 +20,8 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    ( Desktop.init, Cmd.none )
+    Desktop.init
+        |> Tuple.mapSecond (Cmd.map DesktopMsg)
 
 
 type Msg
