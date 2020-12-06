@@ -2,6 +2,7 @@ module Tests exposing (..)
 
 import App.Terminal as Terminal
 import Expect
+import FileSystem as Fs
 import Store
 import Test exposing (..)
 
@@ -114,7 +115,7 @@ terminalApp =
             Terminal.init
 
         update =
-            Terminal.update
+            Terminal.update [] (Fs.DirInfo "/" [])
     in
     describe "Terminal app"
         [ test "No output at the start" <|

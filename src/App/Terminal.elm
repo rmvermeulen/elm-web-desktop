@@ -3,7 +3,14 @@ module App.Terminal exposing (..)
 import Delay
 import Element exposing (..)
 import Element.Input as Input
+import FileSystem as Fs
 import Helpers
+
+
+type alias ProcessInfo =
+    { id : Int
+    , name : String
+    }
 
 
 type alias Model =
@@ -12,6 +19,14 @@ type alias Model =
     , commands : List String
     , lines : List String
     }
+
+
+type Msg
+    = EditLine String
+    | ExecLine
+    | Print String
+    | EnableInput
+    | DisableInput
 
 
 delayMs : Float -> Msg -> Cmd Msg
@@ -29,16 +44,8 @@ init =
     )
 
 
-type Msg
-    = EditLine String
-    | ExecLine
-    | Print String
-    | EnableInput
-    | DisableInput
-
-
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
+update : List ProcessInfo -> Fs.DirInfo -> Msg -> Model -> ( Model, Cmd Msg )
+update processes root msg model =
     case msg of
         ExecLine ->
             let
@@ -46,13 +53,13 @@ update msg model =
                     model.currentLine
 
                 ( output, execCmd ) =
-                    execCommand command
+                    execCommand processes root command
             in
             { model
                 | commands = model.commands ++ [ command ]
                 , currentLine = ""
             }
-                |> update (Print output)
+                |> update processes root (Print output)
                 |> (\( m, printCmd ) -> ( m, Cmd.batch [ execCmd, printCmd ] ))
 
         Print line ->
@@ -99,12 +106,16 @@ printSequence interval lines =
             )
 
 
-execCommand : String -> ( String, Cmd Msg )
-execCommand command =
+execCommand : List ProcessInfo -> Fs.DirInfo -> String -> ( String, Cmd Msg )
+execCommand processes root command =
     case command of
         "help" ->
             ( "[ Help ]"
-            , [ "help - show this information", "ls - list items in current folder", "" ]
+            , [ "help - show this information"
+              , "ls - list items in current folder"
+              , "top - show active processes"
+              , ""
+              ]
                 |> printSequence 25
                 |> Cmd.batch
             )
@@ -112,11 +123,30 @@ execCommand command =
         "ls" ->
             let
                 lineCmds =
-                    printSequence 25 [ "file1", "file2", "home/", "vacation/" ]
+                    root.entries
+                        |> List.filterMap
+                            (\entry ->
+                                case entry of
+                                    Fs.File { name } ->
+                                        Just name
+
+                                    Fs.Dir { name } ->
+                                        Just <| name ++ "/"
+                            )
+                        |> printSequence 25
             in
-            ( ""
+            ( "entries:"
             , Cmd.batch lineCmds
             )
+
+        "top" ->
+            let
+                lineCmds =
+                    processes
+                        |> List.map (\{ id, name } -> "[" ++ String.fromInt id ++ "] " ++ name)
+                        |> printSequence 25
+            in
+            ( "processes:", Cmd.batch lineCmds )
 
         _ ->
             ( "[Ran \"" ++ command ++ "\"]", delayMs 250 EnableInput )

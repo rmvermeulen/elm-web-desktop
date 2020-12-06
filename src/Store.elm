@@ -75,9 +75,14 @@ values (Store _ dict) =
 
 
 pairs : Store data -> List ( Id data, data )
-pairs (Store _ dict) =
-    Dict.toList dict
+pairs store =
+    rawPairs store
         |> List.map (Tuple.mapFirst Id)
+
+
+rawPairs : Store data -> List ( Int, data )
+rawPairs (Store _ dict) =
+    Dict.toList dict
 
 
 map : (Id data -> data -> data) -> Store data -> Store data

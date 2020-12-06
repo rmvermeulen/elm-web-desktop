@@ -14,6 +14,7 @@ import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
+import FileSystem as Fs
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import List.Extra
@@ -22,6 +23,7 @@ import Set exposing (Set)
 import Set.Extra
 import Store exposing (Store)
 import String.Extra
+import Task
 
 
 type alias Icon =
@@ -90,6 +92,7 @@ type alias Model =
     , mFocus : Maybe Focus
     , mDragState : Maybe DragState
     , mActivatedIcon : Maybe IconId
+    , fs : Fs.DirInfo
     }
 
 
@@ -158,8 +161,16 @@ init =
         processes : Store Process
         processes =
             Store.empty
+
+        fs =
+            Fs.DirInfo "/"
+                [ Fs.File <| Fs.FileInfo "TextEditor" "[StartProcess:TextEditor]"
+                , Fs.File <| Fs.FileInfo "ImageEditor" "[StartProcess:ImageEditor]"
+                , Fs.File <| Fs.FileInfo "Terminal" "[StartProcess:Terminal]"
+                , Fs.File <| Fs.FileInfo "Game" "[StartProcess:Game]"
+                ]
     in
-    ( Model icons processes Nothing Nothing Nothing
+    ( Model icons processes Nothing Nothing Nothing fs
     , Cmd.none
     )
 
@@ -194,6 +205,11 @@ appIconPath app =
 
         Game ->
             "logo.svg"
+
+
+processName : Process -> String
+processName =
+    .data >> appDataType >> appName
 
 
 appName : App -> String
@@ -538,12 +554,20 @@ update msg model =
                 |> Maybe.map
                     (\proc ->
                         let
+                            processInfoList : List Terminal.ProcessInfo
+                            processInfoList =
+                                Store.pairs model.processes
+                                    |> List.map
+                                        (\( Store.Id id, p ) ->
+                                            Terminal.ProcessInfo id (processName p)
+                                        )
+
                             ( data, cmd ) =
                                 case proc.data of
                                     TerminalData terminalModel ->
                                         let
                                             ( newTerminalModel, terminalCmd ) =
-                                                Terminal.update terminalMsg terminalModel
+                                                Terminal.update processInfoList model.fs terminalMsg terminalModel
                                         in
                                         ( TerminalData newTerminalModel, terminalCmd |> Cmd.map (TerminalMsg pid) )
 
