@@ -18,6 +18,7 @@ type alias Model =
     , currentLine : String
     , commands : List String
     , lines : List String
+    , cwd : List String
     }
 
 
@@ -27,6 +28,7 @@ type Msg
     | Print String
     | EnableInput
     | DisableInput
+    | ChangeCwd (List String)
 
 
 delayMs : Float -> Msg -> Cmd Msg
@@ -36,7 +38,7 @@ delayMs ms =
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model False "" [] []
+    ( Model False "" [] [] []
     , Cmd.batch
         [ delayMs 50 (Print "Terminal ready")
         , delayMs 150 EnableInput
@@ -52,8 +54,12 @@ update processes root msg model =
                 command =
                     model.currentLine
 
+                cmdRoot =
+                    Fs.dirAtPath model.cwd root
+                        |> Maybe.withDefault root
+
                 ( output, execCmd ) =
-                    execCommand processes root command
+                    execCommand processes cmdRoot command
             in
             { model
                 | commands = model.commands ++ [ command ]
@@ -73,6 +79,20 @@ update processes root msg model =
 
         DisableInput ->
             ( { model | inputEnabled = False }, Cmd.none )
+
+        ChangeCwd cwd ->
+            ( if List.isEmpty cwd then
+                { model | cwd = cwd }
+
+              else
+                case Fs.dirAtPath cwd root of
+                    Just _ ->
+                        { model | cwd = cwd }
+
+                    Nothing ->
+                        model
+            , Cmd.none
+            )
 
 
 type Printable
@@ -108,11 +128,16 @@ printSequence interval lines =
 
 execCommand : List ProcessInfo -> Fs.DirInfo -> String -> ( String, Cmd Msg )
 execCommand processes root command =
-    case command of
-        "help" ->
+    let
+        words =
+            String.split " " command
+    in
+    case words of
+        [ "help" ] ->
             ( "[ Help ]"
             , [ "help - show this information"
               , "ls - list items in current folder"
+              , "cd - change directory"
               , "top - show active processes"
               , ""
               ]
@@ -120,7 +145,7 @@ execCommand processes root command =
                 |> Cmd.batch
             )
 
-        "ls" ->
+        "ls" :: target ->
             let
                 lineCmds =
                     root.entries
@@ -139,7 +164,18 @@ execCommand processes root command =
             , Cmd.batch lineCmds
             )
 
-        "top" ->
+        "cd" :: targets ->
+            case targets of
+                [] ->
+                    ( "", delayMs 25 (ChangeCwd []) )
+
+                [ target ] ->
+                    ( "", delayMs 25 (ChangeCwd <| String.split "/" target) )
+
+                _ ->
+                    ( "takes 1 argument", Cmd.none )
+
+        [ "top" ] ->
             let
                 lineCmds =
                     processes
@@ -161,7 +197,13 @@ view model =
         input =
             Input.text [ Helpers.onEnter ExecLine ]
                 { onChange = EditLine
-                , label = Input.labelLeft [] (text "$")
+                , label =
+                    Input.labelLeft []
+                        (model.cwd
+                            |> String.join "/"
+                            |> (\s -> String.append s "/")
+                            |> text
+                        )
                 , placeholder = Nothing
                 , text = model.currentLine
                 }

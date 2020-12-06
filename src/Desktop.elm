@@ -168,6 +168,7 @@ init =
                 , Fs.File <| Fs.FileInfo "ImageEditor" "[StartProcess:ImageEditor]"
                 , Fs.File <| Fs.FileInfo "Terminal" "[StartProcess:Terminal]"
                 , Fs.File <| Fs.FileInfo "Game" "[StartProcess:Game]"
+                , Fs.Dir <| Fs.DirInfo "photos" []
                 ]
     in
     ( Model icons processes Nothing Nothing Nothing fs
