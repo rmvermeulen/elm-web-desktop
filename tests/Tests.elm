@@ -1,5 +1,6 @@
 module Tests exposing (..)
 
+import App.Terminal as Terminal
 import Expect
 import Store
 import Test exposing (..)
@@ -103,4 +104,54 @@ storeModule =
                         v ++ ", and another value"
                 in
                 Expect.equal (Store.map fn store |> Store.values) [ "Some value, and another value" ]
+        ]
+
+
+terminalApp : Test
+terminalApp =
+    let
+        ( initModel, initCmd ) =
+            Terminal.init
+
+        update =
+            Terminal.update
+    in
+    describe "Terminal app"
+        [ test "No output at the start" <|
+            \_ -> List.isEmpty initModel.lines |> Expect.equal True
+        , test "Msg Print" <|
+            let
+                string =
+                    "some text"
+
+                ( model, _ ) =
+                    update (Terminal.Print string) initModel
+            in
+            \_ ->
+                model.lines
+                    |> Expect.equal [ string ]
+        , test "Input is disabled" <|
+            \_ -> Expect.false "Input enabled?" initModel.inputEnabled
+        , test "Msg EnableInput" <|
+            let
+                ( model, _ ) =
+                    update Terminal.EnableInput initModel
+            in
+            \_ -> model.inputEnabled |> Expect.true "Input should be enabled"
+        , test "Msg DisableInput" <|
+            let
+                ( model, _ ) =
+                    { initModel | inputEnabled = True }
+                        |> update Terminal.DisableInput
+            in
+            \_ -> model.inputEnabled |> Expect.false "Input should be disabled"
+        , test "Msg EditLine" <|
+            let
+                line =
+                    "this is the new line"
+
+                ( model, _ ) =
+                    update (Terminal.EditLine line) initModel
+            in
+            \_ -> model.currentLine |> Expect.equal line
         ]
