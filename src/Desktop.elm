@@ -53,7 +53,7 @@ type alias Window =
 
 createWindow : String -> Int -> Int -> Window
 createWindow title x y =
-    Window title x y 300 200 False Floating 0
+    Window title x y 500 400 False Floating 0
 
 
 type alias Process =
