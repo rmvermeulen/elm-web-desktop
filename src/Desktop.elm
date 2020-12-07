@@ -28,7 +28,7 @@ import Task
 
 
 type alias Icon =
-    { app : App
+    { app : AppType
     , name : String
     , description : String
     , src : String
@@ -68,7 +68,7 @@ type Focus
     | DesktopIcon IconId
 
 
-type App
+type AppType
     = TextEditor
     | ImageEditor
     | Terminal
@@ -98,7 +98,7 @@ type alias Model =
 
 
 type alias AppId =
-    Store.Id App
+    Store.Id AppType
 
 
 type alias IconId =
@@ -111,7 +111,7 @@ type alias Pid =
 
 type Msg
     = StopProcess Pid
-    | StartProcess App
+    | StartProcess AppType
     | ToggleSelect Focus
     | Select Focus
     | Deselect
@@ -137,11 +137,11 @@ init =
         icons : Store Icon
         icons =
             let
-                getInfo : App -> ( String, String )
+                getInfo : AppType -> ( String, String )
                 getInfo app =
                     ( appName app, appIconPath app )
 
-                addIcon : App -> Store Icon -> Store Icon
+                addIcon : AppType -> Store Icon -> Store Icon
                 addIcon app table =
                     let
                         ( name, iconPath ) =
@@ -177,7 +177,7 @@ init =
     )
 
 
-appDataType : AppData -> App
+appDataType : AppData -> AppType
 appDataType data =
     case data of
         TextEditorData _ ->
@@ -193,7 +193,7 @@ appDataType data =
             Game
 
 
-appIconPath : App -> String
+appIconPath : AppType -> String
 appIconPath app =
     case app of
         TextEditor ->
@@ -214,7 +214,7 @@ processName =
     .data >> appDataType >> appName
 
 
-appName : App -> String
+appName : AppType -> String
 appName app =
     case app of
         TextEditor ->
