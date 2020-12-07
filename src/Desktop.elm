@@ -15,6 +15,7 @@ import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import FileSystem as Fs
+import Helpers
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (hardcoded, required)
 import List.Extra
@@ -731,7 +732,7 @@ viewProcessWindow pid { data, window } =
                     , height shrink
                     , Background.color (rgb 0 0 1)
                     , mouseDown [ Background.color (rgb 0.2 0.2 1) ]
-                    , Events.onMouseDown (StartDragWindow pid)
+                    , Helpers.preventDefaultOnMouseDown (StartDragWindow pid)
                     ]
                 <|
                     row [ width fill ]

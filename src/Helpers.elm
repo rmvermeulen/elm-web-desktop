@@ -1,13 +1,13 @@
 module Helpers exposing (..)
 
-import Element
+import Element exposing (..)
 import Html.Events
 import Json.Decode as Decode
 
 
-onEnter : msg -> Element.Attribute msg
+onEnter : msg -> Attribute msg
 onEnter msg =
-    Element.htmlAttribute
+    htmlAttribute
         (Html.Events.on "keyup"
             (Decode.field "key" Decode.string
                 |> Decode.andThen
@@ -20,3 +20,10 @@ onEnter msg =
                     )
             )
         )
+
+
+preventDefaultOnMouseDown : msg -> Attribute msg
+preventDefaultOnMouseDown msg =
+    htmlAttribute <|
+        Html.Events.preventDefaultOn "mousedown"
+            (Decode.map (\m -> ( m, True )) (Decode.succeed msg))
