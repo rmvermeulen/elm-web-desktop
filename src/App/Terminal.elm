@@ -2,6 +2,8 @@ module App.Terminal exposing (..)
 
 import Delay
 import Element exposing (..)
+import Element.Background as Background
+import Element.Border as Border
 import Element.Input as Input
 import FileSystem as Fs
 import Helpers
@@ -185,7 +187,7 @@ execCommand processes root command =
             ( "processes:", Cmd.batch lineCmds )
 
         _ ->
-            ( "[Ran \"" ++ command ++ "\"]", delayMs 250 EnableInput )
+            ( "Unknown command \"" ++ command ++ "\"", delayMs 50 EnableInput )
 
 
 view : Model -> Element Msg
@@ -195,7 +197,17 @@ view model =
             List.map text model.lines
 
         input =
-            Input.text [ Helpers.onEnter ExecLine ]
+            Input.text
+                [ alignBottom
+                , Helpers.onEnter ExecLine
+                , Background.color (rgba 0 0 0 0)
+                , Border.widthEach
+                    { bottom = 2
+                    , left = 0
+                    , right = 0
+                    , top = 0
+                    }
+                ]
                 { onChange = EditLine
                 , label =
                     Input.labelLeft []
@@ -215,4 +227,10 @@ view model =
             else
                 lines
     in
-    column [ width fill, height fill, padding 4, clip ] children
+    column
+        [ width fill
+        , height fill
+        , padding 4
+        , clip
+        ]
+        children
