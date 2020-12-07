@@ -90,10 +90,11 @@ type DragState
 type alias Model =
     { icons : Store Icon
     , processes : Store Process
+    , fs : Fs.DirInfo
     , mFocus : Maybe Focus
     , mDragState : Maybe DragState
+    , mResizeState : Maybe DragState
     , mActivatedIcon : Maybe IconId
-    , fs : Fs.DirInfo
     }
 
 
@@ -109,26 +110,37 @@ type alias Pid =
     Store.Id Process
 
 
-type Msg
+type
+    Msg
+    -- processes
     = StopProcess Pid
     | StartProcess AppType
-    | ToggleSelect Focus
-    | Select Focus
-    | Deselect
-    | MinimizeWindow Pid
-    | UnMinimizeWindow Pid
-    | MaximizeWindow Pid
-    | UnMaximizeWindow Pid
-    | ResizeWindow Pid Int Int
-    | StartDragWindow Pid
-    | SetDragOffset Int Int
-    | StopDragWindow
-    | MoveDragWindow Int Int
-    | DeactivateIcon
+      -- running processes
     | GameMsg Pid Game.Msg
     | TextEditorMsg Pid TextEditor.Msg
     | ImageEditorMsg Pid ImageEditor.Msg
     | TerminalMsg Pid Terminal.Msg
+      -- select desktop elements
+    | ToggleSelect Focus
+    | Select Focus
+    | Deselect
+      -- change window mode
+    | MinimizeWindow Pid
+    | UnMinimizeWindow Pid
+    | MaximizeWindow Pid
+    | UnMaximizeWindow Pid
+      -- move windows around
+    | MoveWindowSetOffset Int Int
+    | MoveWindowStart Pid
+    | MoveWindowStop
+    | MoveWindowUpdate Int Int
+      -- resize windows
+    | ResizeWindowUpdate Int Int
+    | ResizeWindowSetOffset Int Int
+    | ResizeWindowStart Pid
+    | ResizeWindowStop
+      -- icons
+    | DeactivateIcon
 
 
 init : ( Model, Cmd Msg )
@@ -172,7 +184,7 @@ init =
                 , Fs.Dir <| Fs.DirInfo "photos" []
                 ]
     in
-    ( Model icons processes Nothing Nothing Nothing fs
+    ( Model icons processes fs Nothing Nothing Nothing Nothing
     , Cmd.none
     )
 
@@ -333,139 +345,6 @@ update msg model =
             in
             ( { model | processes = processes }, createCmd newPid )
 
-        ToggleSelect target ->
-            case model.mFocus of
-                Just focus ->
-                    if focus == target then
-                        -- select current target again, so deselect
-                        update Deselect model
-
-                    else
-                        -- different selection, select a new target
-                        update (Select target) model
-
-                Nothing ->
-                    -- no current selection, select new target
-                    update (Select target) model
-
-        Select target ->
-            selectTarget target model
-
-        Deselect ->
-            simply { model | mFocus = Nothing, mActivatedIcon = Nothing }
-
-        MinimizeWindow id ->
-            let
-                processes =
-                    updateProcessWindow id (\window -> { window | minimized = True }) model.processes
-            in
-            simply { model | processes = processes }
-
-        UnMinimizeWindow id ->
-            let
-                processes =
-                    updateProcessWindow id (\window -> { window | minimized = False }) model.processes
-            in
-            simply { model | processes = processes }
-
-        MaximizeWindow id ->
-            let
-                processes =
-                    updateProcessWindow id (\window -> { window | state = Maximized }) model.processes
-            in
-            simply { model | processes = processes }
-
-        UnMaximizeWindow id ->
-            let
-                processes =
-                    updateProcessWindow id (\window -> { window | state = Floating }) model.processes
-            in
-            simply { model | processes = processes }
-
-        ResizeWindow id w h ->
-            let
-                processes =
-                    updateProcessWindow id
-                        (\window ->
-                            { window
-                                | w = w
-                                , h = h
-                            }
-                        )
-                        model.processes
-            in
-            simply { model | processes = processes }
-
-        StartDragWindow pid ->
-            let
-                reorderedProcesses =
-                    model.processes
-                        |> Store.map
-                            (\id data ->
-                                let
-                                    { window } =
-                                        data
-
-                                    depth =
-                                        if id == pid then
-                                            0
-
-                                        else
-                                            window.depth + 1
-                                in
-                                { data | window = { window | depth = depth } }
-                            )
-            in
-            simply
-                { model
-                    | mDragState = Just (DragStart pid)
-                    , processes = reorderedProcesses
-                }
-
-        StopDragWindow ->
-            simply { model | mDragState = Nothing }
-
-        SetDragOffset x y ->
-            let
-                dragState =
-                    model.mDragState
-                        |> Maybe.map
-                            (\state ->
-                                case state of
-                                    DragStart pid ->
-                                        DragMove pid x y
-
-                                    DragMove pid _ _ ->
-                                        DragMove pid x y
-                            )
-            in
-            simply { model | mDragState = dragState }
-
-        MoveDragWindow x y ->
-            case model.mDragState of
-                Just (DragMove id offsetX offsetY) ->
-                    let
-                        processes =
-                            updateProcessWindow id
-                                (\window ->
-                                    { window
-                                        | x = x + offsetX
-                                        , y = y + offsetY
-                                    }
-                                )
-                                model.processes
-                    in
-                    simply { model | processes = processes }
-
-                Just (DragStart _) ->
-                    simply model
-
-                Nothing ->
-                    simply model
-
-        DeactivateIcon ->
-            simply { model | mActivatedIcon = Nothing }
-
         GameMsg pid gameMsg ->
             model.processes
                 |> Store.get pid
@@ -585,6 +464,192 @@ update msg model =
                         ( { model | processes = processes }, cmd )
                     )
                 |> Maybe.withDefault (simply model)
+
+        ToggleSelect target ->
+            case model.mFocus of
+                Just focus ->
+                    if focus == target then
+                        -- select current target again, so deselect
+                        update Deselect model
+
+                    else
+                        -- different selection, select a new target
+                        update (Select target) model
+
+                Nothing ->
+                    -- no current selection, select new target
+                    update (Select target) model
+
+        Select target ->
+            selectTarget target model
+
+        Deselect ->
+            simply { model | mFocus = Nothing, mActivatedIcon = Nothing }
+
+        MinimizeWindow id ->
+            let
+                processes =
+                    updateProcessWindow id (\window -> { window | minimized = True }) model.processes
+            in
+            simply { model | processes = processes }
+
+        UnMinimizeWindow id ->
+            let
+                processes =
+                    updateProcessWindow id (\window -> { window | minimized = False }) model.processes
+            in
+            simply { model | processes = processes }
+
+        MaximizeWindow id ->
+            let
+                processes =
+                    updateProcessWindow id (\window -> { window | state = Maximized }) model.processes
+            in
+            simply { model | processes = processes }
+
+        UnMaximizeWindow id ->
+            let
+                processes =
+                    updateProcessWindow id (\window -> { window | state = Floating }) model.processes
+            in
+            simply { model | processes = processes }
+
+        MoveWindowStart pid ->
+            let
+                reorderedProcesses =
+                    model.processes
+                        |> Store.map
+                            (\id data ->
+                                let
+                                    { window } =
+                                        data
+
+                                    depth =
+                                        if id == pid then
+                                            0
+
+                                        else
+                                            window.depth + 1
+                                in
+                                { data | window = { window | depth = depth } }
+                            )
+            in
+            simply
+                { model
+                    | mDragState = Just (DragStart pid)
+                    , processes = reorderedProcesses
+                }
+
+        MoveWindowSetOffset x y ->
+            let
+                dragState =
+                    model.mDragState
+                        |> Maybe.map
+                            (\state ->
+                                case state of
+                                    DragStart pid ->
+                                        DragMove pid x y
+
+                                    DragMove pid _ _ ->
+                                        DragMove pid x y
+                            )
+            in
+            simply { model | mDragState = dragState }
+
+        MoveWindowUpdate x y ->
+            case model.mDragState of
+                Just (DragMove id offsetX offsetY) ->
+                    let
+                        processes =
+                            updateProcessWindow id
+                                (\window ->
+                                    { window
+                                        | x = x + offsetX
+                                        , y = y + offsetY
+                                    }
+                                )
+                                model.processes
+                    in
+                    simply { model | processes = processes }
+
+                Just (DragStart _) ->
+                    simply model
+
+                Nothing ->
+                    simply model
+
+        MoveWindowStop ->
+            simply { model | mDragState = Nothing }
+
+        ResizeWindowStart pid ->
+            let
+                reorderedProcesses =
+                    model.processes
+                        |> Store.map
+                            (\id data ->
+                                let
+                                    { window } =
+                                        data
+
+                                    depth =
+                                        if id == pid then
+                                            0
+
+                                        else
+                                            window.depth + 1
+                                in
+                                { data | window = { window | depth = depth } }
+                            )
+            in
+            simply
+                { model
+                    | mResizeState = Just (DragStart pid)
+                    , processes = reorderedProcesses
+                }
+
+        ResizeWindowSetOffset x y ->
+            let
+                dragState =
+                    model.mResizeState
+                        |> Maybe.map
+                            (\state ->
+                                case state of
+                                    DragStart pid ->
+                                        DragMove pid x y
+
+                                    DragMove pid _ _ ->
+                                        DragMove pid x y
+                            )
+            in
+            simply { model | mResizeState = dragState }
+
+        ResizeWindowUpdate x y ->
+            case model.mResizeState of
+                Just (DragMove id offsetX offsetY) ->
+                    let
+                        processes =
+                            updateProcessWindow id
+                                (\window ->
+                                    { window
+                                        | w = max 200 (x + offsetX)
+                                        , h = max 200 (y + offsetY)
+                                    }
+                                )
+                                model.processes
+                    in
+                    simply { model | processes = processes }
+
+                Just (DragStart _) ->
+                    simply model
+
+                Nothing ->
+                    simply model
+
+        ResizeWindowStop ->
+            simply { model | mResizeState = Nothing }
+
+        DeactivateIcon ->
+            simply { model | mActivatedIcon = Nothing }
 
 
 updateProcessWindow : Pid -> (Window -> Window) -> Store Process -> Store Process
@@ -732,7 +797,7 @@ viewProcessWindow pid { data, window } =
                     , height shrink
                     , Background.color (rgb 0 0 1)
                     , mouseDown [ Background.color (rgb 0.2 0.2 1) ]
-                    , Helpers.preventDefaultOnMouseDown (StartDragWindow pid)
+                    , Helpers.preventDefaultOnMouseDown (MoveWindowStart pid)
                     ]
                 <|
                     row [ width fill ]
@@ -743,9 +808,18 @@ viewProcessWindow pid { data, window } =
             body =
                 viewApp pid data
 
-            footer =
-                el [ width fill, height (px 20), Background.color (gray 0.5) ] <|
-                    text "This is the footer"
+            footer fh =
+                row [ width fill, height (px fh), Background.color (gray 0.5) ] <|
+                    [ text "This is the footer"
+                    , el
+                        [ width (px fh)
+                        , height (px fh)
+                        , alignRight
+                        , Background.color (gray 0.2)
+                        , Helpers.preventDefaultOnMouseDown (ResizeWindowStart pid)
+                        ]
+                        none
+                    ]
         in
         case state of
             Floating ->
@@ -757,7 +831,7 @@ viewProcessWindow pid { data, window } =
                     ]
                     [ header
                     , body
-                    , footer
+                    , footer 20
                     ]
 
             Maximized ->
@@ -767,7 +841,7 @@ viewProcessWindow pid { data, window } =
                     ]
                     [ header
                     , body
-                    , footer
+                    , footer 20
                     ]
 
 
@@ -872,6 +946,7 @@ viewIcon { name, description, src } id selected =
             , width fill
             , Events.onClick
                 (Select <| DesktopIcon id)
+            , pointer
             ]
 
         selectionAttrs =
@@ -940,41 +1015,48 @@ quickGradient { angle, stepCount, start, end } =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions { mDragState, processes } =
-    case mDragState of
-        Just (DragMove pid x y) ->
-            let
-                decoder : Decoder Msg
-                decoder =
-                    Decode.succeed MoveDragWindow
-                        |> required "x" Decode.int
-                        |> required "y" Decode.int
-            in
-            Sub.batch
-                [ Browser.Events.onMouseMove decoder
-                , Browser.Events.onMouseUp (Decode.succeed StopDragWindow)
-                ]
+subscriptions { mDragState, mResizeState, processes } =
+    let
+        subForDrag mState ( offsetMsg, moveMsg, stopMsg ) =
+            case mState of
+                Just (DragMove pid x y) ->
+                    let
+                        decoder : Decoder Msg
+                        decoder =
+                            Decode.succeed moveMsg
+                                |> required "x" Decode.int
+                                |> required "y" Decode.int
+                    in
+                    Sub.batch
+                        [ Browser.Events.onMouseMove decoder
+                        , Browser.Events.onMouseUp (Decode.succeed stopMsg)
+                        ]
 
-        Just (DragStart pid) ->
-            Store.get pid processes
-                |> Maybe.map
-                    (\{ window } ->
-                        let
-                            windowOffset x y =
-                                SetDragOffset (window.x - x) (window.y - y)
+                Just (DragStart pid) ->
+                    Store.get pid processes
+                        |> Maybe.map
+                            (\{ window } ->
+                                let
+                                    windowOffset x y =
+                                        offsetMsg (window.w - x) (window.h - y)
 
-                            decoder : Decoder Msg
-                            decoder =
-                                Decode.succeed windowOffset
-                                    |> required "x" Decode.int
-                                    |> required "y" Decode.int
-                        in
-                        Sub.batch
-                            [ Browser.Events.onMouseMove decoder
-                            , Browser.Events.onMouseUp (Decode.succeed StopDragWindow)
-                            ]
-                    )
-                |> Maybe.withDefault Sub.none
+                                    decoder : Decoder Msg
+                                    decoder =
+                                        Decode.succeed windowOffset
+                                            |> required "x" Decode.int
+                                            |> required "y" Decode.int
+                                in
+                                Sub.batch
+                                    [ Browser.Events.onMouseMove decoder
+                                    , Browser.Events.onMouseUp (Decode.succeed stopMsg)
+                                    ]
+                            )
+                        |> Maybe.withDefault Sub.none
 
-        Nothing ->
-            Sub.none
+                Nothing ->
+                    Sub.none
+    in
+    Sub.batch
+        [ subForDrag mDragState ( MoveWindowSetOffset, MoveWindowUpdate, MoveWindowStop )
+        , subForDrag mResizeState ( ResizeWindowSetOffset, ResizeWindowUpdate, ResizeWindowStop )
+        ]
