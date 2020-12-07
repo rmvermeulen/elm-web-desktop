@@ -215,4 +215,4 @@ view model =
             else
                 lines
     in
-    column [] children
+    column [ width fill, height fill, padding 4, clip ] children

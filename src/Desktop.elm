@@ -1017,7 +1017,7 @@ quickGradient { angle, stepCount, start, end } =
 subscriptions : Model -> Sub Msg
 subscriptions { mDragState, mResizeState, processes } =
     let
-        subForDrag mState ( offsetMsg, moveMsg, stopMsg ) =
+        subForDrag mState getWindowOffsetMsg moveMsg stopMsg =
             case mState of
                 Just (DragMove pid x y) ->
                     let
@@ -1037,12 +1037,9 @@ subscriptions { mDragState, mResizeState, processes } =
                         |> Maybe.map
                             (\{ window } ->
                                 let
-                                    windowOffset x y =
-                                        offsetMsg (window.w - x) (window.h - y)
-
                                     decoder : Decoder Msg
                                     decoder =
-                                        Decode.succeed windowOffset
+                                        Decode.succeed (getWindowOffsetMsg window)
                                             |> required "x" Decode.int
                                             |> required "y" Decode.int
                                 in
@@ -1057,6 +1054,12 @@ subscriptions { mDragState, mResizeState, processes } =
                     Sub.none
     in
     Sub.batch
-        [ subForDrag mDragState ( MoveWindowSetOffset, MoveWindowUpdate, MoveWindowStop )
-        , subForDrag mResizeState ( ResizeWindowSetOffset, ResizeWindowUpdate, ResizeWindowStop )
+        [ subForDrag mDragState
+            (\w x y -> MoveWindowSetOffset (w.x - x) (w.y - y))
+            MoveWindowUpdate
+            MoveWindowStop
+        , subForDrag mResizeState
+            (\w x y -> ResizeWindowSetOffset (w.w - x) (w.h - y))
+            ResizeWindowUpdate
+            ResizeWindowStop
         ]
